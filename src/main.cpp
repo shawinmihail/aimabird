@@ -7,6 +7,6 @@ int main(int argc, char **argv)
   std::cout << "I am a bird!\n";
   ros::init(argc, argv, "aimabird");
   AttControl attControl;
-  attControl.runTest();
+  attControl.prepareToFly();
   return 0;
 }

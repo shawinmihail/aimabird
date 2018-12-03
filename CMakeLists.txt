@@ -9,6 +9,39 @@ find_package(
   std_msgs
 )
 
+# GAZEBO
+
+find_package(gazebo REQUIRED)
+set(PROTOBUF_IMPORT_DIRS "")
+
+foreach(ITR ${GAZEBO_INCLUDE_DIRS})
+  if(ITR MATCHES ".*gazebo-[0-9.]+$")
+    set(PROTOBUF_IMPORT_DIRS "${ITR}/gazebo/msgs/proto")
+  endif()
+endforeach()
+
+if("${GAZEBO_VERSION}" VERSION_LESS "6.0")
+  message(FATAL_ERROR "You need at least Gazebo 6.0. Your version: ${GAZEBO_VERSION}")
+else()
+  message("Gazebo version: ${GAZEBO_VERSION}")
+endif()
+
+set(GAZEBO_MSG_INCLUDE_DIRS)
+foreach(ITR ${GAZEBO_INCLUDE_DIRS})
+  if(ITR MATCHES ".*gazebo-[0-9.]+$")
+    set(GAZEBO_MSG_INCLUDE_DIRS "${ITR}/gazebo/msgs")
+  endif()
+endforeach()
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${GAZEBO_CXX_FLAGS} -std=c++11 -Wno-deprecated-declarations")
+
+include_directories(
+  ${GAZEBO_INCLUDE_DIRS}
+  ${GAZEBO_MSG_INCLUDE_DIRS}
+)
+
+###
+
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES broadcast
@@ -27,5 +60,5 @@ add_library(aimabird src/AttControl.cpp)
 #add_library(px4math src/Matrix/matrix/math.hpp)
 
 target_link_libraries(
-    aimabird_node aimabird ${catkin_LIBRARIES}
+    aimabird_node aimabird ${GAZEBO_LIBRARIES} ${catkin_LIBRARIES}
 )

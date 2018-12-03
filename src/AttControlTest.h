@@ -3,6 +3,7 @@
 #include <vector>
 #include <chrono>
 
+#include <gazebo_msgs/ModelStates.h>
 #include <Eigen/Dense>
 
 #include "ros/ros.h"
@@ -11,7 +12,6 @@
 #include "geometry_msgs/TwistStamped.h"
 #include "geometry_msgs/PoseWithCovarianceStamped.h"
 #include "geometry_msgs/TwistWithCovarianceStamped.h"
-#include "nav_msgs/Odometry.h"
 #include "mavros_msgs/Thrust.h"
 #include "mavros_msgs/State.h"
 #include "mavros_msgs/CommandBool.h"
@@ -31,30 +31,22 @@ enum Status{
     tookoff
 };
 
-enum Command {
-    checkSensors,
-    prepareToFly,
-    takeoff,
-    runTestFlight,
-    land
-};
-
-class AttControl {
+class AttControl{
 
 public:
     AttControl();
-    void prepareToFly();
+    void runTest();
+
 private:
-    void checkSensors();
+
     bool init();
     void subscribe();
     void initPubs();
     void initServs();
     void writeLogData();
-    void clockTick();
-    void waitMainLoop(int s);
-    bool waiting();
-    bool sendIdling();
+
+    void initPubsGz();
+    void subscribeGz();
 
     bool checkFeedback();
     bool setOffboard();
@@ -63,12 +55,14 @@ private:
     bool goToLocalPoint(const Eigen::Vector3f& r0);
 
     void pubCtrl(float thr, const Eigen::Quaternion<float>& quat);
+    void pubFakeVisData();
 
     void imuCb(const sensor_msgs::Imu& msg);
     void posCb(const geometry_msgs::PoseStamped& msg);
     void velCb(const geometry_msgs::TwistStamped& msg);
     void stateCb(const mavros_msgs::State& msg);
-    void odometryCb(const nav_msgs::Odometry& msg);
+
+    void modelStateCbGz(const gazebo_msgs::ModelStates& msg);
 
 private:
     std::string imuTopicName;
@@ -77,10 +71,15 @@ private:
     std::string stateTopicName;
     std::string setattTopicName;
     std::string setthrTopicName;
-    std::string odometryTopicName;
     std::string setmodeServiceName;
     std::string armServiceName;
-    std::string cmdTopicName;
+
+    std::string visPoseTopicName;
+    std::string visPoseCovTopicName;
+    std::string visVelCovTopicName;
+
+    std::string modelStateTopicNameGz;
+    std::string setModelStateTopicNameGz;
 
     ros::NodeHandle nodeHandle;
     ros::ServiceClient modeService;
@@ -89,27 +88,33 @@ private:
     ros::Subscriber posSub;
     ros::Subscriber velSub;
     ros::Subscriber stateSub;
-    ros::Subscriber cmdSub;
-    ros::Subscriber odometrySub;
+
+    ros::Subscriber modelStateSubGz;
+
     ros::Publisher attPub;
     ros::Publisher thrPub;
+
+    ros::Publisher visPosePub;
+    ros::Publisher visPoseCovPub;
+    ros::Publisher visVelCovPub;
+
     ros::Rate rate;
 
     Eigen::Quaternion<float> qPx;
     Eigen::Vector3f rPx;
     Eigen::Vector3f vPx;
     Eigen::Vector3f aPx;
-
     bool imuReady;
     bool posReady;
     bool velReady;
-
+    bool armed;
     mavros_msgs::State mavState;
 
-    Eigen::Quaternion<float> qOd;
-    Eigen::Vector3f rOd;
-    Eigen::Vector3f vOd;
-    Eigen::Vector3f oOd;
+    Eigen::Quaternion<float> qGz;
+    Eigen::Vector3f rGz;
+    Eigen::Vector3f vGz;
+    Eigen::Vector3f aGz;
+    Eigen::Vector3f oGz;
 
     Status status;
 
@@ -123,6 +128,4 @@ private:
     uint64_t timeMs;
     uint64_t lastTickMs;
     uint64_t dTimeMs;
-    uint64_t waitCounter;
-
 };
