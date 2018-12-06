@@ -1,6 +1,26 @@
 #include <Eigen/Dense>
 #include <math.h>
 #include <limits>
+#include <cmath>
+#include "Params.h"
+
+bool isZeroFloat(float v, float eps = 1e-3){
+    if (std::fabs(v) < eps){
+        return true;
+    }
+    return false;
+}
+
+bool isZeroVector3f(const Eigen::Vector3f v, float eps = 1e-3){
+    return isZeroFloat(v.norm(), eps);
+}
+
+Eigen::Vector3f quatRotate(const Eigen::Quaternion<float>& q, const Eigen::Vector3f v){
+
+  Eigen::Quaternion<float> qRotated(0.f, v[0], v[1], v[2]);
+  Eigen::Quaternion<float> rotatedP = q.inverse() * qRotated * q;
+  return Eigen::Vector3f(qRotated.x(), qRotated.y(), qRotated.z());
+}
 
 Eigen::Quaternion<float> quatEnuToNed(const Eigen::Quaternion<float>& qEnu){
     float s = sqrt(2.f) / 2.f;
@@ -50,11 +70,34 @@ Eigen::Vector3f cutTwosidesVector3f(const Eigen::Vector3f& v, float min, float m
                           );
 };
 
+Eigen::Quaternion<float> quatFromDirAndYaw(const Eigen::Vector3f v, float yaw, float bowLimit=PI){
+
+    Eigen::Quaternion<float> qYaw(cos(yaw/2.f), 0.f, 0.f, sin(yaw/2.f));
+    if (isZeroVector3f(v)){
+        return qYaw;
+    }
+
+    Eigen::Vector3f pin = UNIT_Z.cross(v);
+    pin.normalize();
+    float cosA = v.normalized().dot(UNIT_Z);
+    cosA = cutAbsFloat(cosA, 1.f - 1e-3); // check if |cosA| < 1 for avoid acos -> Nan
+    float A = acos(cosA);
+    if(v[2] < 0){
+        A = -A;
+    }
+    A = cutAbsFloat(A, bowLimit);
+    float sinHalfA = sin(A/2.f);
+
+    Eigen::Quaternion<float> qBow = Eigen::Quaternion<float>(cos(A/2.f), sinHalfA*pin[0], sinHalfA*pin[1], sinHalfA*pin[2]);
+
+    return qYaw*qBow;
+}
+
 class IntegratorFloat{
 
 public:
     IntegratorFloat(float lim = std::numeric_limits<float>::max()):
-     _res(0.)
+     _res(0.f)
     {
         _lim = lim;
     }
@@ -63,6 +106,10 @@ public:
         _res += x * dt;
         _res = cutAbsFloat(_res, _lim);
         return _res;
+    }
+
+    void reset(){
+        _res = 0.f;
     }
 
 private:
@@ -119,6 +166,10 @@ public:
         _res += x * dt;
         _res = cutAbsVector3f(_res, _lim);
         return _res;
+    }
+
+    void reset(){
+        _res *= 0.f;
     }
 
 private:

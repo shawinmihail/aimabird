@@ -53,22 +53,28 @@ public:
         ss << vector3fToStr(aPx);
         ss << vector3fToStr(oPx);
 
-        ss << quaternionToStr(qGz);
-        ss << vector3fToStr(rGz);
-        ss << vector3fToStr(vGz);
-        ss << vector3fToStr(aGz);
-        ss << vector3fToStr(oGz);
+//         ss << quaternionToStr(qGz);
+//         ss << vector3fToStr(rGz);
+//         ss << vector3fToStr(vGz);
+//         ss << vector3fToStr(aGz);
+//         ss << vector3fToStr(oGz);
 
         ss << quaternionToStr(q0);
-        ss << vector3fToStr(r0);
-        ss << vector3fToStr(v0);
-        ss << vector3fToStr(a0);
-        ss << vector3fToStr(o0) << "\n";
+//         ss << vector3fToStr(r0);
+//         ss << vector3fToStr(v0);
+//         ss << vector3fToStr(a0);
+//         ss << vector3fToStr(o0);
+
+        ss << debug1  << ",";
+        ss << debug2  << ",";
+        ss << debug3  << ",";
+        ss << debug4  << ",";
+        ss << "\n";
 
         return ss.str();
     }
 
-    std::string toCsvHeaderLine() const override{
+    std::string toCsvHeaderLine() const override {
         std::stringstream ss;
 
         ss << nameOf(timeMs) << ",";
@@ -79,17 +85,23 @@ public:
         ss << vector3fNameToStr(nameOf(aPx));
         ss << vector3fNameToStr(nameOf(oPx));
 
-        ss << quaternionNameToStr(nameOf(qGz));
-        ss << vector3fNameToStr(nameOf(rGz));
-        ss << vector3fNameToStr(nameOf(vGz));
-        ss << vector3fNameToStr(nameOf(aGz));
-        ss << vector3fNameToStr(nameOf(oGz));
+//         ss << quaternionNameToStr(nameOf(qGz));
+//         ss << vector3fNameToStr(nameOf(rGz));
+//         ss << vector3fNameToStr(nameOf(vGz));
+//         ss << vector3fNameToStr(nameOf(aGz));
+//         ss << vector3fNameToStr(nameOf(oGz));
 
         ss << quaternionNameToStr(nameOf(q0));
-        ss << vector3fNameToStr(nameOf(r0));
-        ss << vector3fNameToStr(nameOf(v0));
-        ss << vector3fNameToStr(nameOf(a0));
-        ss << vector3fNameToStr(nameOf(o0)) << "\n";
+//         ss << vector3fNameToStr(nameOf(r0));
+//         ss << vector3fNameToStr(nameOf(v0));
+//         ss << vector3fNameToStr(nameOf(a0));
+//         ss << vector3fNameToStr(nameOf(o0));
+
+        ss << nameOf(debug1) << ",";
+        ss << nameOf(debug2) << ",";
+        ss << nameOf(debug3) << ",";
+        ss << nameOf(debug4) << ",";
+        ss << "\n";
 
         return ss.str();
     }
@@ -138,6 +150,11 @@ public:
     Eigen::Vector3f a0;
     Eigen::Vector3f o0;
 
+    float debug1;
+    float debug2;
+    float debug3;
+    float debug4;
+
     float thr;
 };
 
@@ -147,8 +164,8 @@ class Logger{
 
 public:
     Logger(int dataWritePeriod=10):
-     _pathDataLog("~/1simflightlogs/ctrl_data.csv")
-    ,_pathEventsLog("~/1simflightlogs/ctrl_events.csv")
+     _pathDataLog("/home/acsl/1simflightlogs/ctrl_data.csv")
+    ,_pathEventsLog("home/acsl/1simflightlogs/ctrl_events.csv")
     ,_lastDataWriteTimeMs(-1)
     ,_dataWritePeriodMs(dataWritePeriod)
     ,_headered(false)

@@ -5,7 +5,7 @@
 int main(int argc, char **argv)
 {
   std::cout << "I am a bird!\n";
-  ros::init(argc, argv, "aimabird");
+  ros::init(argc, argv, "aimabird_node");
   AttControl attControl;
   attControl.prepareToFly();
   return 0;

@@ -16,6 +16,7 @@
 #include "mavros_msgs/State.h"
 #include "mavros_msgs/CommandBool.h"
 #include "mavros_msgs/SetMode.h"
+#include "std_msgs/UInt32MultiArray.h"
 
 #include "Logger.hpp"
 #include "Math.hpp"
@@ -45,6 +46,7 @@ public:
     AttControl();
     void prepareToFly();
 private:
+    void main();
     void checkSensors();
     bool init();
     void subscribe();
@@ -52,7 +54,7 @@ private:
     void initServs();
     void writeLogData();
     void clockTick();
-    void waitMainLoop(int s);
+    void wait(int s);
     bool waiting();
     bool sendIdling();
 
@@ -61,6 +63,8 @@ private:
     bool arm();
     bool takeoff();
     bool goToLocalPoint(const Eigen::Vector3f& r0);
+    bool goWithAcc(const Eigen::Vector3f& a0);
+    bool accomulateVelocityWithImu(Eigen::Vector3f v0);
 
     void pubCtrl(float thr, const Eigen::Quaternion<float>& quat);
 
@@ -69,6 +73,7 @@ private:
     void velCb(const geometry_msgs::TwistStamped& msg);
     void stateCb(const mavros_msgs::State& msg);
     void odometryCb(const nav_msgs::Odometry& msg);
+    void photonCmdCb(const std_msgs::UInt32MultiArray& msg);
 
 private:
     std::string imuTopicName;
@@ -81,6 +86,7 @@ private:
     std::string setmodeServiceName;
     std::string armServiceName;
     std::string cmdTopicName;
+    std::string photonTopicName;
 
     ros::NodeHandle nodeHandle;
     ros::ServiceClient modeService;
@@ -91,14 +97,19 @@ private:
     ros::Subscriber stateSub;
     ros::Subscriber cmdSub;
     ros::Subscriber odometrySub;
+    ros::Subscriber photonSub;
     ros::Publisher attPub;
     ros::Publisher thrPub;
     ros::Rate rate;
+
 
     Eigen::Quaternion<float> qPx;
     Eigen::Vector3f rPx;
     Eigen::Vector3f vPx;
     Eigen::Vector3f aPx;
+    Eigen::Vector3f aPxClearI;
+    Eigen::Vector3f gIestimated;
+    bool gIesimated;
 
     bool imuReady;
     bool posReady;
@@ -111,13 +122,18 @@ private:
     Eigen::Vector3f vOd;
     Eigen::Vector3f oOd;
 
+    Eigen::Quaternion<float> q0;
+
     Status status;
 
     Logger logger;
     flightData logData;
 
-    DifferenciatorVector3f thrustPidDiff;
-    IntegratorVector3f thrustPidInt;
+    DifferenciatorVector3f goLocalDr;
+    IntegratorVector3f goLocalIr;
+    IntegratorVector3f goAccIr;
+    IntegratorVector3f accamulateVelIrEstimator;
+    IntegratorVector3f accamulateVelIr;
 
     std::chrono::high_resolution_clock::time_point initTime;
     uint64_t timeMs;
