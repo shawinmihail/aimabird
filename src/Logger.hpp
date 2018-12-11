@@ -165,7 +165,7 @@ class Logger{
 public:
     Logger(int dataWritePeriod=10):
      _pathDataLog("/home/acsl/1simflightlogs/ctrl_data.csv")
-    ,_pathEventsLog("home/acsl/1simflightlogs/ctrl_events.csv")
+    ,_pathEventsLog("/home/acsl/1simflightlogs/ctrl_events.csv")
     ,_lastDataWriteTimeMs(-1)
     ,_dataWritePeriodMs(dataWritePeriod)
     ,_headered(false)
@@ -174,7 +174,7 @@ public:
         _dataFile = ::fopen(_pathDataLog.c_str(), "w");
     }
 
-    void addEvent(std::string event, uint64_t timeMs = -1, bool printToConsole = true){
+    void addEvent(std::string event, uint64_t timeMs = -1, bool printToConsole = false){
 
         if(printToConsole){
             printf("[%d] %s\n", timeMs, event.c_str());

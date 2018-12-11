@@ -14,12 +14,12 @@ AttControl::AttControl():
 ,photonTopicName("/aimabird_node/photonCmd")
 
 ,status(Status::begin)
-,gIesimated(false)
+,gIinited(false)
 ,imuReady(false)
 ,posReady(false)
 ,velReady(false)
 
-,rate(100)
+,rate(33)
 ,initTime(std::chrono::high_resolution_clock::now())
 ,timeMs(0)
 ,lastTickMs(0)
@@ -66,7 +66,7 @@ void AttControl::prepareToFly()
                     }
                     else{
                         logger.addEvent("AttCtrl: sensors not ready yet");
-                        wait(3);
+                        wait(1);
                     }
                     break;
 
@@ -79,7 +79,7 @@ void AttControl::prepareToFly()
                     }
                     else {
                         logger.addEvent("AttCtrl: can't offboard yet ...");
-                        wait(3);
+                        wait(1);
                     }
                     break;
 
@@ -92,20 +92,32 @@ void AttControl::prepareToFly()
                     }
                     else{
                         logger.addEvent("AttCtrl: can't arm yet ...");
-                        wait(3);
+                        wait(1);
                     }
                     break;
 
                 case Status::armed:
-                    done = accomulateVelocityWithImu(Eigen::Vector3f (0.f, 0.f, 1.f));
+                    done = goToLocalPoint(Eigen::Vector3f (0.f, 0.f, 3.0f));
                     if (done) {
                         logger.addEvent("AttCtrl: tookoff");
-                        //status = Status::tookoff;
+                        status = Status::tookoff;
                     }
                     break;
 
                 case Status::tookoff:
-                    done = accomulateVelocityWithImu(Eigen::Vector3f (0.f, 0.f, -0.2f));
+                    done = goToLocalPoint(Eigen::Vector3f (0.f, 0.f, 0.0f));
+                    if (done) {
+                        logger.addEvent("AttCtrl: stabilized");
+                        //status = Status::stabilized;
+                    }
+                    break;
+
+                case Status::stabilized:
+                    done = accomulateVelocityWithImu(Eigen::Vector3f (0.f, 0.f, 0.0f));
+                    if (done) {
+                        logger.addEvent("AttCtrl: stabilized");
+                        status = Status::stabilized;
+                    }
                     break;
             }
         }
@@ -114,9 +126,9 @@ void AttControl::prepareToFly()
             writeLogData();
         }
         if (status >= Status::sensorsReady && status < Status::armed){
-            sendIdling();
+            sendIdling(); // send min thrust before flight to able offboard / arm
         }
-        if (status < Status::armed){
+        if (status < Status::armed){ // write empty data before fill it in control funcs
             logData.debug1 = 0.f;
             logData.debug2 = 0.f;
             logData.debug3 = 0.f;
@@ -201,32 +213,56 @@ bool AttControl::takeoff(){ // testing
 //     pubCtrl(thrust, qPx);
 }
 
-bool AttControl::goToLocalPoint(const Eigen::Vector3f& r0) //TODO get by copy??
+bool AttControl::goToLocalPoint(Eigen::Vector3f r0)
 {
-    Eigen::Vector3f r = rOd;
-    Eigen::Vector3f v = vOd;
-
-    Eigen::Vector3f dr =  r0 - r;
     float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
 
-    Eigen::Vector3f regOutVec = THRUST_PID_P * cutAbsVector3f(dr, THRUST_PID_P_ERROR_LIM) +
-                                //THRUST_PID_D * cutAbsVector3f(goLocalDr.get(dr, dt), THRUST_PID_D_ERROR_LIM) +
-                                THRUST_PID_D * cutAbsVector3f(-v, THRUST_PID_D_ERROR_LIM) +
-                                Eigen::Vector3f(0., 0., FREE_FALL_ACC_ABS);
+    Eigen::Vector3f a = aPxClearI;
+    Eigen::Vector3f v = vPx;
+    Eigen::Vector3f r = rPx;
+    Eigen::Vector3f dr = r0 - r;
+    Eigen::Vector3f dv = -v;
+    dr = cutAbsVector3f(dr, Eigen::Vector3f(GO_LOCAL_INPUT_LIM_H, GO_LOCAL_INPUT_LIM_H, GO_LOCAL_INPUT_LIM_V));
 
-    Eigen::Quaternion<float> q0 = Eigen::Quaternion<float>(); // TODO assert q without flips
-    q0.setFromTwoVectors(UNIT_Z, regOutVec); // TODO calc yaw and pitch/roll quat
-    //q0 = Eigen::Quaternion<float>(2., 2., 50, 100.);
-    q0.normalize();
+    /** **/
+    Eigen::Vector3f P = Eigen::Vector3f(GO_LOCAL_PID_P_H * dr[0], GO_LOCAL_PID_P_H * dr[1], GO_LOCAL_PID_P_V * dr[2]);
+    Eigen::Vector3f I;
+    if(dr[2] * v[2] < GO_LOCAL_ANTIWINDUP_PARAM_V) {
+        I =  goLocalIr.get(Eigen::Vector3f(0.f, 0.f, GO_LOCAL_PID_I_V * dr[2]), dt);
+    }
+    else{
+        I = goLocalIr.get();
+    }
+    I = cutAbsVector3f(I, GO_LOCAL_PID_I_LIM_V);
+    Eigen::Vector3f D = Eigen::Vector3f(GO_LOCAL_PID_D_H * dv[0], GO_LOCAL_PID_D_H * dv[1], GO_LOCAL_PID_D_V * dv[2]);
+    /** **/
 
-    float thrust = regOutVec.norm() / TW / FREE_FALL_ACC_ABS; //TODO check use norm for thrust
-    thrust = cutTwosidesFloat(thrust, MIN_THRUST, 0.66);
-
+    Eigen::Vector3f regOutVec = P + I + D + Eigen::Vector3f(0., 0., FREE_FALL_ACC_ABS);
+    float yaw = 0*PI/2.f;
+    q0 = quatFromDirAndYaw(regOutVec, yaw, 5.f*PI/ 180.f);
+    float thrust = regOutVec.norm() / TW / FREE_FALL_ACC_ABS;
+    thrust = cutTwosidesFloat(thrust, MIN_THRUST, MAX_THRUST);
     pubCtrl(thrust, q0);
-    return true;
+
+    logData.debug1 = regOutVec[0];
+    logData.debug2 = regOutVec[1];
+    logData.debug3 = regOutVec[2];
+
+    if (isZeroVector3f(dr, POSE_EPS)){
+        return true;
+    }
+    return false;
 }
 
-bool AttControl::goWithAcc(const Eigen::Vector3f& a0) // TODO remake
+bool AttControl::goRelativePosition(Eigen::Vector3f r0)
+{
+    Eigen::Vector3f r = rPx;
+    r0 = r + r0;
+    return goToLocalPoint(r0);
+}
+
+
+bool AttControl::goWithAcc(Eigen::Vector3f a0) // TODO remake
 {
     Eigen::Vector3f a = aPxClearI;
 
@@ -248,7 +284,7 @@ bool AttControl::goWithAcc(const Eigen::Vector3f& a0) // TODO remake
     return true;
 }
 
-bool AttControl::accomulateVelocityWithImu(Eigen::Vector3f v0)
+bool AttControl::accomulateVelocityWithImu(Eigen::Vector3f v0) // TODO how remove small oscilations?
 {   /* d time for calc */
     float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
 
@@ -257,18 +293,18 @@ bool AttControl::accomulateVelocityWithImu(Eigen::Vector3f v0)
     Eigen::Vector3f dv = v0 - v;
 
     /* velocity regulator */
-    Eigen::Vector3f integralPart = ACC_VEL_PID_I * accamulateVelIr.get(dv, dt);
-    integralPart = cutAbsVector3f(Eigen::Vector3f(0.f, 0.f, integralPart[2]), ACC_VEL_PID_I_ERROR_LIM); // integral ONLY for altitude
+    Eigen::Vector3f integralPart = ACCUM_VEL_PID_I * accamulateVelIr.get(dv, dt);
+    integralPart = cutAbsVector3f(Eigen::Vector3f(0.f, 0.f, integralPart[2]), ACCUM_VEL_PID_I_ERROR_LIM); // integral ONLY for altitude
 
-    Eigen::Vector3f dvdot = -Eigen::Vector3f(aPxClearI[0], aPxClearI[1], 0.f);
-    Eigen::Vector3f differentialPart = cutAbsVector3f(ACC_VEL_PID_D * dvdot, ACC_VEL_PID_D_ERROR_LIM); // diff only hor vel
+    Eigen::Vector3f regOutVec = cutAbsVector3f(ACCUM_VEL_PID_P * dv, ACCUM_VEL_PID_P_ERROR_LIM)
+    + integralPart
+    + Eigen::Vector3f(0., 0., 1.f / TW);
 
-    Eigen::Vector3f regOutVec = cutAbsVector3f(ACC_VEL_PID_P * dv, ACC_VEL_PID_P_ERROR_LIM) + integralPart + differentialPart;
-
-    q0 = quatFromDirAndYaw(regOutVec, 0.f, 5.f*PI/ 180.f);
+    float yaw = 0*PI/2.f;
+    q0 = quatFromDirAndYaw(regOutVec, yaw, 30.f*PI/ 180.f);
 
     /* reg + hower thrust */
-    float thrust = regOutVec.dot(UNIT_Z) +  1.f / TW;
+    float thrust = regOutVec.dot(UNIT_Z);
 
     /* pub */
     thrust = cutTwosidesFloat(thrust, MIN_THRUST, MAX_THRUST);
@@ -284,6 +320,41 @@ bool AttControl::accomulateVelocityWithImu(Eigen::Vector3f v0)
     return false;
 }
 
+bool AttControl::accomulateVelocityWithImu(float vz) // TODO dont ready yet
+{   /* d time for calc */
+//     float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
+//
+//     /* velocity estimation */
+//     Eigen::Vector3f v = accamulateVelIrEstimator.get(aPxClearI, dt);
+//     Eigen::Vector3f dv = (vz - v[2]);
+//
+//     /* velocity regulator */
+//     Eigen::Vector3f integralPart = ACCUM_VEL_PID_I * accamulateVelIr.get(dv, dt);
+//     integralPart = cutAbsFloat(integralPart[2], ACCUM_VEL_PID_I_ERROR_LIM); // integral ONLY for altitude
+//
+//     Eigen::Vector3f regOutVec = cutAbsVector3f(ACCUM_VEL_PID_P * dv, ACCUM_VEL_PID_P_ERROR_LIM)
+//     + integralPart
+//     + Eigen::Vector3f(0., 0., 1.f / TW);
+//
+//     float yaw = 0*PI/2.f;
+//     q0 = quatFromDirAndYaw(regOutVec, yaw, 30.f*PI/ 180.f);
+//
+//     /* reg + hower thrust */
+//     float thrust = regOutVec.dot(UNIT_Z);
+//
+//     /* pub */
+//     thrust = cutTwosidesFloat(thrust, MIN_THRUST, MAX_THRUST);
+//     logData.debug1 = v[0];
+//     logData.debug2 = v[1];
+//     logData.debug3 = v[2];
+//     logData.debug4 = thrust;
+//     pubCtrl(thrust, q0);
+//
+//     if (isZeroVector3f(dv, EST_VEL_EPS)){
+//         return true;
+//     }
+    return false;
+}
 
 void AttControl::initServs()
 {
@@ -340,14 +411,12 @@ void AttControl::imuCb(const sensor_msgs::Imu& msg)
     aPx = Eigen::Vector3f(msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z);
     qPx = Eigen::Quaternion<float>(msg.orientation.w, msg.orientation.x, msg.orientation.y, msg.orientation.z);
 
-    if (!gIesimated){
+    if (!gIinited){
         gIestimated =  Eigen::Vector3f(aPx);
         gIestimated = quatRotate(qPx.inverse(), gIestimated);
-        gIesimated = true;
+        gIinited = true;
     }
     aPxClearI = quatRotate(qPx.inverse(), aPx) - gIestimated;
-    aPxClearI[0] = - aPxClearI[0];
-    aPxClearI[1] = - aPxClearI[1];
     imuReady = true;
 }
 

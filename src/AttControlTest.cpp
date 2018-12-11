@@ -164,9 +164,9 @@ bool AttControl::goToLocalPoint(const Eigen::Vector3f& r0) // testing with Gz da
     Eigen::Vector3f dr =  r0 - r;
     float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_TIME);
 
-    Eigen::Vector3f regOutVec = THRUST_PID_P * cutAbsVector3f(dr, THRUST_PID_P_ERROR_LIM) +
+    Eigen::Vector3f regOutVec = ACUM_LOCAL_PID_P * cutAbsVector3f(dr, ACUM_LOCAL_PID_P_ERROR_LIM) +
                                 //THRUST_PID_D * cutAbsVector3f(thrustPidDiff.get(dr, dt), THRUST_PID_D_ERROR_LIM) +
-                                THRUST_PID_D * cutAbsVector3f(-v, THRUST_PID_D_ERROR_LIM) +
+                                ACUM_LOCAL_PID_D * cutAbsVector3f(-v, ACUM_LOCAL_PID_D_ERROR_LIM) +
                                 Eigen::Vector3f(0., 0., FREE_FALL_ACC_ABS);
 
     Eigen::Quaternion<float> q0 = Eigen::Quaternion<float>();

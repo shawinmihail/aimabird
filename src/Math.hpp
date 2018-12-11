@@ -18,7 +18,7 @@ bool isZeroVector3f(const Eigen::Vector3f v, float eps = 1e-3){
 Eigen::Vector3f quatRotate(const Eigen::Quaternion<float>& q, const Eigen::Vector3f v){
 
   Eigen::Quaternion<float> qRotated(0.f, v[0], v[1], v[2]);
-  Eigen::Quaternion<float> rotatedP = q.inverse() * qRotated * q;
+  qRotated = q.inverse() * qRotated * q;
   return Eigen::Vector3f(qRotated.x(), qRotated.y(), qRotated.z());
 }
 
@@ -30,6 +30,16 @@ Eigen::Quaternion<float> quatEnuToNed(const Eigen::Quaternion<float>& qEnu){
     Eigen::Quaternion<float> qNed = qEnu*q2.inverse();
     qNed = q1 * qNed;
     return qNed;
+}
+
+Eigen::Quaternion<float> quatNedToEnu(const Eigen::Quaternion<float>& qNed){
+    float s = sqrt(2.f) / 2.f;
+    Eigen::Quaternion<float> q1(s, s, 0.f, 0.f);
+    Eigen::Quaternion<float> q2(1.f, 0.f, 0.f, 0.f);
+
+    Eigen::Quaternion<float> qEnu = qNed*q2;
+    qEnu = q1.inverse() * qEnu;
+    return qEnu;
 }
 
 float cutAbsFloat(float v, float lim){
@@ -70,7 +80,7 @@ Eigen::Vector3f cutTwosidesVector3f(const Eigen::Vector3f& v, float min, float m
                           );
 };
 
-Eigen::Quaternion<float> quatFromDirAndYaw(const Eigen::Vector3f v, float yaw, float bowLimit=PI){
+Eigen::Quaternion<float> quatFromDirAndYaw(const Eigen::Vector3f v, float yaw, float bowLimit=PI){ // TODO thats a mistake
 
     Eigen::Quaternion<float> qYaw(cos(yaw/2.f), 0.f, 0.f, sin(yaw/2.f));
     if (isZeroVector3f(v)){
@@ -78,19 +88,40 @@ Eigen::Quaternion<float> quatFromDirAndYaw(const Eigen::Vector3f v, float yaw, f
     }
 
     Eigen::Vector3f pin = UNIT_Z.cross(v);
+//     if (isZeroVector3f(pin), 1e-6){
+//         return qYaw;
+//     }
     pin.normalize();
     float cosA = v.normalized().dot(UNIT_Z);
-    cosA = cutAbsFloat(cosA, 1.f - 1e-3); // check if |cosA| < 1 for avoid acos -> Nan
+    cosA = cutAbsFloat(cosA, 1.f - 1e-9); // check if |cosA| < 1 for avoid acos -> Nan
     float A = acos(cosA);
     if(v[2] < 0){
         A = -A;
     }
-    A = cutAbsFloat(A, bowLimit);
-    float sinHalfA = sin(A/2.f);
+    A = cutAbsFloat(A, bowLimit)    ;
+    float sinHalfA = sin(A / 2.f);
 
     Eigen::Quaternion<float> qBow = Eigen::Quaternion<float>(cos(A/2.f), sinHalfA*pin[0], sinHalfA*pin[1], sinHalfA*pin[2]);
 
-    return qYaw*qBow;
+    return qBow*qYaw;
+}
+
+Eigen::Quaternion<float> quatFromDir(const Eigen::Vector3f v, const Eigen::Vector3f dir, float bowLimit=PI){
+
+    Eigen::Vector3f pin = v.cross(dir);
+    pin.normalize();
+    float cosA = v.normalized().dot(dir.normalized());
+    cosA = cutAbsFloat(cosA, 1.f - 1e-3); // check if |cosA| < 1 for avoid acos -> Nan
+    float A = acos(cosA);
+    if(v[2] * dir[2] < 0){ // check it
+        A = -A;
+    }
+    A = cutAbsFloat(A, bowLimit)    ;
+    float sinHalfA = sin(A / 2.f);
+
+    Eigen::Quaternion<float> qBow = Eigen::Quaternion<float>(cos(A/2.f), sinHalfA*pin[0], sinHalfA*pin[1], sinHalfA*pin[2]);
+
+    return qBow;
 }
 
 class IntegratorFloat{
@@ -168,6 +199,10 @@ public:
         return _res;
     }
 
+    Eigen::Vector3f get(){
+        return _res;
+    }
+
     void reset(){
         _res *= 0.f;
     }
@@ -209,4 +244,24 @@ private:
     Eigen::Vector3f _lim;
     Eigen::Vector3f _x0;
     bool _x0Inited;
+};
+
+
+class BowRateLimiter{
+public:
+    BowRateLimiter(float lim=0.001):
+    _lim(lim)
+    {}
+
+    Eigen::Quaternion<float> get(const Eigen::Quaternion<float>& q){
+        Eigen::Vector3f v1 = Eigen::Vector3f(q.x(), q.y(), 0.f);
+        Eigen::Vector3f dv = v1 - _v;
+        dv = cutAbsVector3f(dv, _lim);
+        v1 = _v + dv;
+        _v = v1;
+        return Eigen::Quaternion<float>(q.w(), _v[0], _v[1], q.z());
+    }
+private:
+    Eigen::Vector3f _v;
+    float _lim;
 };

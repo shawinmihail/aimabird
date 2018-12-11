@@ -29,7 +29,8 @@ enum Status{
     sensorsReady,
     offboarded,
     armed,
-    tookoff
+    tookoff,
+    stabilized
 };
 
 enum Command {
@@ -62,9 +63,12 @@ private:
     bool setOffboard();
     bool arm();
     bool takeoff();
-    bool goToLocalPoint(const Eigen::Vector3f& r0);
-    bool goWithAcc(const Eigen::Vector3f& a0);
+    bool goToLocalPoint(Eigen::Vector3f r0);
+    bool goOnRoute(std::vector<Eigen::Vector3f> route); //TODO not implemented yet
+    bool goRelativePosition(Eigen::Vector3f r0);
+    bool goWithAcc(Eigen::Vector3f a0);
     bool accomulateVelocityWithImu(Eigen::Vector3f v0);
+    bool accomulateVelocityWithImu(float vz);
 
     void pubCtrl(float thr, const Eigen::Quaternion<float>& quat);
 
@@ -109,7 +113,7 @@ private:
     Eigen::Vector3f aPx;
     Eigen::Vector3f aPxClearI;
     Eigen::Vector3f gIestimated;
-    bool gIesimated;
+    bool gIinited;
 
     bool imuReady;
     bool posReady;
@@ -140,5 +144,4 @@ private:
     uint64_t lastTickMs;
     uint64_t dTimeMs;
     uint64_t waitCounter;
-
 };
