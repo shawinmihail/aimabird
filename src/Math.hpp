@@ -1,3 +1,4 @@
+#pragma once
 #include <Eigen/Dense>
 #include <math.h>
 #include <limits>
@@ -46,10 +47,10 @@ float cutAbsFloat(float v, float lim){
     return fmin(fmax(v, -lim), lim);
 };
 
-float cutTwosidesFloat(float v, float min, float max){
-    float v1 = fmax(v, min);
-    float v2 = fmin(v1, max);
-    return fmin(fmax(v, min), max);
+float cutTwosidesFloat(float v, float a, float b){
+    float max0 = fmax(a, b);
+    float min0 = fmin(a, b);
+    return fmin(fmax(v, min0), max0);
 };
 
 Eigen::Vector3f cutAbsVector3f(const Eigen::Vector3f& v, const Eigen::Vector3f& lim){
@@ -67,16 +68,16 @@ Eigen::Vector3f cutAbsVector3f(const Eigen::Vector3f& v, float lim){
 };
 
 Eigen::Vector3f cutTwosidesVector3f(const Eigen::Vector3f& v, const Eigen::Vector3f& min, const Eigen::Vector3f& max){
-    return Eigen::Vector3f(fmin(fmax(v(0), min(0)), max(0)),
-                           fmin(fmax(v(1), min(1)), max(1)),
-                           fmin(fmax(v(2), min(2)), max(2))
+    return Eigen::Vector3f(cutTwosidesFloat(v(0), min(0), max(0)),
+                           cutTwosidesFloat(v(1), min(1), max(1)),
+                           cutTwosidesFloat(v(2), min(2), max(2))
                           );
 };
 
 Eigen::Vector3f cutTwosidesVector3f(const Eigen::Vector3f& v, float min, float max){
-    return Eigen::Vector3f(fmin(fmax(v(0), min), max),
-                           fmin(fmax(v(1), min), max),
-                           fmin(fmax(v(2), min), max)
+    return Eigen::Vector3f(cutTwosidesFloat(v(0), min, max),
+                           cutTwosidesFloat(v(1), min, max),
+                           cutTwosidesFloat(v(2), min, max)
                           );
 };
 

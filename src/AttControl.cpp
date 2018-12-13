@@ -18,8 +18,9 @@ AttControl::AttControl():
 ,imuReady(false)
 ,posReady(false)
 ,velReady(false)
+,odometryReceived(false)
 
-,rate(33)
+,rate(CTRL_RATE)
 ,initTime(std::chrono::high_resolution_clock::now())
 ,timeMs(0)
 ,lastTickMs(0)
@@ -46,6 +47,7 @@ void AttControl::prepareToFly()
     while (ros::ok){
 
         clockTick();
+
         bool done = false;
         if (!waiting()) {
             switch (status){
@@ -124,6 +126,7 @@ void AttControl::prepareToFly()
 
         if (status >= Status::armed){
             writeLogData();
+            estimateState(odometryReceived);
         }
         if (status >= Status::sensorsReady && status < Status::armed){
             sendIdling(); // send min thrust before flight to able offboard / arm
@@ -217,8 +220,8 @@ bool AttControl::goToLocalPoint(Eigen::Vector3f r0)
 {
     float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
 
-    Eigen::Vector3f v = vOd;
-    Eigen::Vector3f r = rOd;
+    Eigen::Vector3f r = rEs;
+    Eigen::Vector3f v = vEs;
     Eigen::Vector3f dr = r0 - r;
     Eigen::Vector3f dv = -v;
     dr = cutAbsVector3f(dr, Eigen::Vector3f(GO_LOCAL_INPUT_LIM_H, GO_LOCAL_INPUT_LIM_H, GO_LOCAL_INPUT_LIM_V));
@@ -237,7 +240,7 @@ bool AttControl::goToLocalPoint(Eigen::Vector3f r0)
     /** **/
 
     Eigen::Vector3f regOutVec = P + I + D + Eigen::Vector3f(0., 0., FREE_FALL_ACC_ABS);
-    float yaw = 0*PI/2.f;
+    float yaw = 0 * PI;
     q0 = quatFromDirAndYaw(regOutVec, yaw, 5.f*PI/ 180.f);
     float thrust = regOutVec.norm() / TW / FREE_FALL_ACC_ABS;
     thrust = cutTwosidesFloat(thrust, MIN_THRUST, MAX_THRUST);
@@ -451,6 +454,33 @@ void AttControl::odometryCb(const nav_msgs::Odometry& msg)
     oOd = Eigen::Vector3f(msg.twist.twist.angular.x,
                           msg.twist.twist.angular.y,
                           msg.twist.twist.angular.z);
+
+    odometryReceived = true;
+}
+
+bool AttControl::estimateState(bool measured)
+{
+    odometryReceived = false;
+    float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
+
+    if (measured){
+        if (isZeroVector3f(rOd) || isZeroVector3f(vOd)){
+            PosVel pv = se.get(aPxClearI, dt, true);
+            rEs = pv.pos;
+            vEs = pv.vel;
+        }
+        else {
+        PosVel m = PosVel(rOd, vOd);
+        PosVel pv = se.get(m, aPxClearI, dt);
+        rEs = pv.pos;
+        vEs = pv.vel;
+        }
+    }
+    else{
+        PosVel pv = se.get(aPxClearI, dt);
+        rEs = pv.pos;
+        vEs = pv.vel;
+    }
 }
 
 void AttControl::photonCmdCb(const std_msgs::UInt32MultiArray& msg)
@@ -489,9 +519,11 @@ void AttControl::writeLogData()
     logData.vPx = vPx;
     logData.aPx = aPxClearI;
 
-    logData.qGz = qOd; // TODO: rename log fields
-    logData.rGz = rOd;
-    logData.vGz = vOd;
+    logData.rOd = rOd;
+    logData.vOd = vOd;
+
+    logData.rEs = rEs;
+    logData.vEs = vEs;
 
     logData.q0 = q0;
 

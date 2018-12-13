@@ -54,8 +54,11 @@ public:
         ss << vector3fToStr(oPx);
 
 //         ss << quaternionToStr(qGz);
-        ss << vector3fToStr(rGz);
-        ss << vector3fToStr(vGz);
+        ss << vector3fToStr(rOd);
+        ss << vector3fToStr(vOd);
+
+        ss << vector3fToStr(rEs);
+        ss << vector3fToStr(vEs);
 //         ss << vector3fToStr(aGz);
 //         ss << vector3fToStr(oGz);
 
@@ -86,8 +89,11 @@ public:
         ss << vector3fNameToStr(nameOf(oPx));
 
 //         ss << quaternionNameToStr(nameOf(qGz));
-        ss << vector3fNameToStr(nameOf(rGz));
-        ss << vector3fNameToStr(nameOf(vGz));
+        ss << vector3fNameToStr(nameOf(rOd));
+        ss << vector3fNameToStr(nameOf(vOd));
+
+        ss << vector3fNameToStr(nameOf(rEs));
+        ss << vector3fNameToStr(nameOf(vEs));
 //         ss << vector3fNameToStr(nameOf(aGz));
 //         ss << vector3fNameToStr(nameOf(oGz));
 
@@ -144,11 +150,24 @@ public:
     Eigen::Vector3f aGz;
     Eigen::Vector3f oGz;
 
+    Eigen::Quaternion<float> qOd;
+    Eigen::Vector3f rOd;
+    Eigen::Vector3f vOd;
+    Eigen::Vector3f aOd;
+    Eigen::Vector3f oOd;
+
+    Eigen::Quaternion<float> qEs;
+    Eigen::Vector3f rEs;
+    Eigen::Vector3f vEs;
+    Eigen::Vector3f aEs;
+    Eigen::Vector3f oEs;
+
     Eigen::Quaternion<float> q0;
     Eigen::Vector3f r0;
     Eigen::Vector3f v0;
     Eigen::Vector3f a0;
     Eigen::Vector3f o0;
+
 
     float debug1;
     float debug2;
@@ -164,8 +183,8 @@ class Logger{
 
 public:
     Logger(int dataWritePeriod=10):
-     _pathDataLog("/home/maxtar/1simflightlogs/ctrl_data.csv")
-    ,_pathEventsLog("/home/maxtar/1simflightlogs/ctrl_events.csv")
+     _pathDataLog("/home/acsl/1simflightlogs/ctrl_data.csv")
+    ,_pathEventsLog("/home/acsl/1simflightlogs/ctrl_events.csv")
     ,_lastDataWriteTimeMs(-1)
     ,_dataWritePeriodMs(dataWritePeriod)
     ,_headered(false)

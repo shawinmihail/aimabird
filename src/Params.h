@@ -1,6 +1,6 @@
+#pragma once
 #include <limits>
 #include <Eigen/Dense>
-#pragma once
 
 /* constants */
 const std::string OFFBOARD("OFFBOARD");                                     // ros offboard mode

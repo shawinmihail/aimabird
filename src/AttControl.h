@@ -21,6 +21,7 @@
 #include "Logger.hpp"
 #include "Math.hpp"
 #include "Params.h"
+#include "SimpleEstimator.hpp"
 
 
 enum Status{
@@ -60,6 +61,7 @@ private:
     bool sendIdling();
 
     bool checkFeedback();
+    bool estimateState(bool measured);
     bool setOffboard();
     bool arm();
     bool takeoff();
@@ -144,4 +146,9 @@ private:
     uint64_t lastTickMs;
     uint64_t dTimeMs;
     uint64_t waitCounter;
+
+    Eigen::Vector3f rEs;
+    Eigen::Vector3f vEs;
+    SimpleEstimator se;
+    bool odometryReceived;
 };
