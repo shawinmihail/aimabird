@@ -97,7 +97,7 @@ void AttControl::prepareToFly()
                     break;
 
                 case Status::armed:
-                    done = goToLocalPoint(Eigen::Vector3f (0.f, 0.f, 3.0f));
+                    done = goToLocalPoint(Eigen::Vector3f (0.f, 0.f, 5.0f));
                     if (done) {
                         logger.addEvent("AttCtrl: tookoff");
                         status = Status::tookoff;
@@ -105,7 +105,7 @@ void AttControl::prepareToFly()
                     break;
 
                 case Status::tookoff:
-                    done = goToLocalPoint(Eigen::Vector3f (0.f, 0.f, 0.0f));
+                    done = goToLocalPoint(Eigen::Vector3f (0.f, 0.f, 2.0f));
                     if (done) {
                         logger.addEvent("AttCtrl: stabilized");
                         //status = Status::stabilized;
@@ -217,9 +217,8 @@ bool AttControl::goToLocalPoint(Eigen::Vector3f r0)
 {
     float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
 
-    Eigen::Vector3f a = aPxClearI;
-    Eigen::Vector3f v = vPx;
-    Eigen::Vector3f r = rPx;
+    Eigen::Vector3f v = vOd;
+    Eigen::Vector3f r = rOd;
     Eigen::Vector3f dr = r0 - r;
     Eigen::Vector3f dv = -v;
     dr = cutAbsVector3f(dr, Eigen::Vector3f(GO_LOCAL_INPUT_LIM_H, GO_LOCAL_INPUT_LIM_H, GO_LOCAL_INPUT_LIM_V));

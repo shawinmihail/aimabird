@@ -54,8 +54,8 @@ public:
         ss << vector3fToStr(oPx);
 
 //         ss << quaternionToStr(qGz);
-//         ss << vector3fToStr(rGz);
-//         ss << vector3fToStr(vGz);
+        ss << vector3fToStr(rGz);
+        ss << vector3fToStr(vGz);
 //         ss << vector3fToStr(aGz);
 //         ss << vector3fToStr(oGz);
 
@@ -86,8 +86,8 @@ public:
         ss << vector3fNameToStr(nameOf(oPx));
 
 //         ss << quaternionNameToStr(nameOf(qGz));
-//         ss << vector3fNameToStr(nameOf(rGz));
-//         ss << vector3fNameToStr(nameOf(vGz));
+        ss << vector3fNameToStr(nameOf(rGz));
+        ss << vector3fNameToStr(nameOf(vGz));
 //         ss << vector3fNameToStr(nameOf(aGz));
 //         ss << vector3fNameToStr(nameOf(oGz));
 
@@ -164,8 +164,8 @@ class Logger{
 
 public:
     Logger(int dataWritePeriod=10):
-     _pathDataLog("/home/acsl/1simflightlogs/ctrl_data.csv")
-    ,_pathEventsLog("/home/acsl/1simflightlogs/ctrl_events.csv")
+     _pathDataLog("/home/maxtar/1simflightlogs/ctrl_data.csv")
+    ,_pathEventsLog("/home/maxtar/1simflightlogs/ctrl_events.csv")
     ,_lastDataWriteTimeMs(-1)
     ,_dataWritePeriodMs(dataWritePeriod)
     ,_headered(false)
