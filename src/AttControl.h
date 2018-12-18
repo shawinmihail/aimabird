@@ -1,3 +1,5 @@
+#pragma once
+
 #include <iostream>
 #include <stdio.h>
 #include <vector>
@@ -17,6 +19,7 @@
 #include "mavros_msgs/CommandBool.h"
 #include "mavros_msgs/SetMode.h"
 #include "std_msgs/UInt32MultiArray.h"
+#include "std_msgs/Float32MultiArray.h"
 
 #include "Logger.hpp"
 #include "Math.hpp"
@@ -59,6 +62,7 @@ private:
     void wait(int s);
     bool waiting();
     bool sendIdling();
+    bool sendPhotonTm();
 
     bool checkFeedback();
     bool estimateState(bool measured);
@@ -79,7 +83,7 @@ private:
     void velCb(const geometry_msgs::TwistStamped& msg);
     void stateCb(const mavros_msgs::State& msg);
     void odometryCb(const nav_msgs::Odometry& msg);
-    void photonCmdCb(const std_msgs::UInt32MultiArray& msg);
+    void photonCmdCb(const std_msgs::Float32MultiArray& msg);
 
 private:
     std::string imuTopicName;
@@ -92,7 +96,8 @@ private:
     std::string setmodeServiceName;
     std::string armServiceName;
     std::string cmdTopicName;
-    std::string photonTopicName;
+    std::string photonCmdTopicName;
+    std::string photonTmTopicName;
 
     ros::NodeHandle nodeHandle;
     ros::ServiceClient modeService;
@@ -103,9 +108,10 @@ private:
     ros::Subscriber stateSub;
     ros::Subscriber cmdSub;
     ros::Subscriber odometrySub;
-    ros::Subscriber photonSub;
+    ros::Subscriber photonCmdSub;
     ros::Publisher attPub;
     ros::Publisher thrPub;
+    ros::Publisher photonTmPub;
     ros::Rate rate;
 
 
@@ -129,11 +135,13 @@ private:
     Eigen::Vector3f oOd;
 
     Eigen::Quaternion<float> q0;
+    Eigen::Vector3f r0;
+    bool aimAccepted;
 
     Status status;
 
     Logger logger;
-    flightData logData;
+    FlightData logData;
 
     DifferenciatorVector3f goLocalDr;
     IntegratorVector3f goLocalIr;
@@ -149,6 +157,8 @@ private:
 
     Eigen::Vector3f rEs;
     Eigen::Vector3f vEs;
-    SimpleEstimator se;
-    bool odometryReceived;
+    Ekf ekfX;
+    Ekf ekfY;
+    Ekf ekfZ;
+    bool odometryReady;
 };

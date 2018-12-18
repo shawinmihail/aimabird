@@ -119,7 +119,7 @@ private:
     Status status;
 
     Logger logger;
-    flightData logData;
+    FlightData logData;
 
     DifferenciatorVector3f thrustPidDiff;
     IntegratorVector3f thrustPidInt;

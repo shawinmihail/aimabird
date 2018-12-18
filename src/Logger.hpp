@@ -1,3 +1,4 @@
+#pragma once
 #include <iostream>
 #include <string>
 #include <sstream>
@@ -36,11 +37,10 @@ public:
     uint64_t timeMs;
 };
 
-
-class flightData : public LogData {
+class FlightData : public LogData {
 
 public:
-    flightData()
+    FlightData()
     {};
 
     std::string toCsvDataLine() const override {
@@ -177,14 +177,14 @@ public:
     float thr;
 };
 
-
-
 class Logger{
 
 public:
-    Logger(int dataWritePeriod=10):
-     _pathDataLog("/home/acsl/1simflightlogs/ctrl_data.csv")
-    ,_pathEventsLog("/home/acsl/1simflightlogs/ctrl_events.csv")
+    Logger(std::string dataPath = "/home/acsl/1simflightlogs/ctrl_data.csv",
+           std::string eventsPath = "/home/acsl/1simflightlogs/ctrl_events.csv",
+           int dataWritePeriod=10):
+     _pathDataLog(dataPath)
+    ,_pathEventsLog(eventsPath)
     ,_lastDataWriteTimeMs(-1)
     ,_dataWritePeriodMs(dataWritePeriod)
     ,_headered(false)
@@ -193,16 +193,16 @@ public:
         _dataFile = ::fopen(_pathDataLog.c_str(), "w");
     }
 
-    void addEvent(std::string event, uint64_t timeMs = -1, bool printToConsole = false){
+    void addEvent(std::string event, uint64_t timeMs = -1, bool printToConsole = true){
 
         if(printToConsole){
-            printf("[%d] %s\n", timeMs, event.c_str());
+            printf("%s [%d]\n", event.c_str(), timeMs);
         }
 
         if (_eventsFile == NULL)
             return;
 
-        ::fprintf(_eventsFile, "[%d] %s\n", timeMs, event.c_str());
+        ::fprintf(_eventsFile, "%s [%d]\n", event.c_str(), timeMs);
         ::fflush(_eventsFile);
     }
 
@@ -239,4 +239,109 @@ private:
     uint64_t _lastDataWriteTimeMs;
 
     bool _headered;
+};
+
+enum readResult{
+    ok,
+    bad,
+    end
+
+};
+
+class Player{
+
+public:
+    Player():
+     _pathDataLog("/home/acsl/1simflightlogs/ctrl_data.csv")
+    ,_headerSkipped(false)
+    {
+        _dataFile = ::fopen(_pathDataLog.c_str(), "r");
+    }
+
+
+    readResult readData(FlightData* ld) {
+
+        if (_dataFile == NULL){
+            return end;
+        }
+
+        char * line = NULL;
+        size_t len = 0;
+        ssize_t read;
+
+        read = ::getline(&line, &len, _dataFile);
+        if (read == -1){
+            ::fclose(_dataFile);
+            _dataFile = NULL;
+            return end;
+        }
+        if (!_headerSkipped){
+            _headerSkipped = true;
+            return bad;
+        }
+
+        std::istringstream ss(line);
+        std::string token;
+        std::vector<std::string> v;
+        while(std::getline(ss, token, ',')) {
+            v.push_back(token);
+        }
+
+        ld->timeMs = biteUint64t(v);
+        ld->qPx = biteQuatF(v);
+        ld->rPx = biteVecF(v);
+        ld->vPx = biteVecF(v);
+        ld->aPx = biteVecF(v);
+        ld->oPx = biteVecF(v);
+        ld->rOd = biteVecF(v);
+        ld->vOd = biteVecF(v);
+        ld->rEs = biteVecF(v);
+        ld->vEs = biteVecF(v);
+        ld->q0 = biteQuatF(v);
+        ld->debug1= biteFloat(v);
+        ld->debug2= biteFloat(v);
+        ld->debug3= biteFloat(v);
+        ld->debug4= biteFloat(v);
+
+        return ok;
+    }
+
+    uint64_t biteUint64t(std::vector<std::string>& v){
+        uint64_t r = std::stoull(v.at(0));
+        if (v.size() > 1){
+            v = std::vector<std::string>(v.begin() + 1, v.end());
+        }
+        return r;
+    }
+
+    float biteFloat(std::vector<std::string>& v){
+        float r = (float)std::stold(v.at(0));
+        if (v.size() > 1){
+            v = std::vector<std::string>(v.begin() + 1, v.end());
+        }
+        return r;
+    }
+
+    Eigen::Quaternion<float> biteQuatF(std::vector<std::string>& v){
+        float w = biteFloat(v);
+        float x = biteFloat(v);
+        float y = biteFloat(v);
+        float z = biteFloat(v);
+        Eigen::Quaternion<float> r(w, x, y, z);
+        return r;
+    }
+
+    Eigen::Vector3f biteVecF(std::vector<std::string>& v){
+        float x = biteFloat(v);
+        float y = biteFloat(v);
+        float z = biteFloat(v);
+        Eigen::Vector3f r(x, y, z);
+        return r;
+    }
+
+private:
+    std::string _pathDataLog;
+
+    FILE* _dataFile;
+    bool _headerSkipped;
 };

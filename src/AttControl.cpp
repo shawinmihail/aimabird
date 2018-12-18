@@ -11,14 +11,16 @@ AttControl::AttControl():
 ,setthrTopicName("/mavros/setpoint_attitude/thrust")
 ,cmdTopicName("/mavros/setpoint_attitude/thrust")
 ,odometryTopicName("/rtabmap/odom")
-,photonTopicName("/aimabird_node/photonCmd")
+,photonCmdTopicName("/aimabird_control/photonCmd")
+,photonTmTopicName("/aimabird_control/photonTm")
 
 ,status(Status::begin)
 ,gIinited(false)
 ,imuReady(false)
 ,posReady(false)
 ,velReady(false)
-,odometryReceived(false)
+,odometryReady(false)
+,aimAccepted(false)
 
 ,rate(CTRL_RATE)
 ,initTime(std::chrono::high_resolution_clock::now())
@@ -55,7 +57,7 @@ void AttControl::prepareToFly()
                 case Status::begin:
                     done = init();
                     if (done){
-                        logger.addEvent("AttCtrl: inited");
+                        logger.addEvent("AttCtrl: inited", timeMs);
                         status = Status::inited;
                     }
                     break;
@@ -63,11 +65,11 @@ void AttControl::prepareToFly()
                 case Status::inited:
                     done = checkFeedback();
                     if (done){
-                        logger.addEvent("AttCtrl: sensors ready");
+                        logger.addEvent("AttCtrl: sensors ready", timeMs);
                         status = Status::sensorsReady;
                     }
                     else{
-                        logger.addEvent("AttCtrl: sensors not ready yet");
+                        logger.addEvent("AttCtrl: waiting feedback ...", timeMs);
                         wait(1);
                     }
                     break;
@@ -76,11 +78,11 @@ void AttControl::prepareToFly()
                     done = setOffboard();
                     done = done & mavState.mode == OFFBOARD;
                     if (done){
-                        logger.addEvent("AttCtrl: offboarded");
+                        logger.addEvent("AttCtrl: offboarded", timeMs);
                         status = Status::offboarded;
                     }
                     else {
-                        logger.addEvent("AttCtrl: can't offboard yet ...");
+                        logger.addEvent("AttCtrl: offboarding ...", timeMs);
                         wait(1);
                     }
                     break;
@@ -89,27 +91,33 @@ void AttControl::prepareToFly()
                     done = arm();
                     done = done & mavState.armed;
                     if (done){
-                        logger.addEvent("AttCtrl: armed");
+                        logger.addEvent("AttCtrl: armed", timeMs);
                         status = Status::armed;
                     }
                     else{
-                        logger.addEvent("AttCtrl: can't arm yet ...");
+                        logger.addEvent("AttCtrl: arming ...", timeMs);
                         wait(1);
                     }
                     break;
 
                 case Status::armed:
-                    done = goToLocalPoint(Eigen::Vector3f (0.f, 0.f, 5.0f));
+                    if (aimAccepted){
+                        done = goToLocalPoint(r0);
+                    }
+                    else{
+                        sendIdling();
+                    }
                     if (done) {
-                        logger.addEvent("AttCtrl: tookoff");
-                        status = Status::tookoff;
+
                     }
                     break;
 
+
+                /*    END switch   */
                 case Status::tookoff:
-                    done = goToLocalPoint(Eigen::Vector3f (0.f, 0.f, 2.0f));
+                    done = goToLocalPoint(Eigen::Vector3f (5.f, 2.f, 5.0f));
                     if (done) {
-                        logger.addEvent("AttCtrl: stabilized");
+                        logger.addEvent("AttCtrl: stabilized", timeMs);
                         //status = Status::stabilized;
                     }
                     break;
@@ -125,18 +133,12 @@ void AttControl::prepareToFly()
         }
 
         if (status >= Status::armed){
+            estimateState(odometryReady);
+            sendPhotonTm();
             writeLogData();
-            estimateState(odometryReceived);
         }
         if (status >= Status::sensorsReady && status < Status::armed){
             sendIdling(); // send min thrust before flight to able offboard / arm
-        }
-        if (status < Status::armed){ // write empty data before fill it in control funcs
-            logData.debug1 = 0.f;
-            logData.debug2 = 0.f;
-            logData.debug3 = 0.f;
-            logData.debug4 = 0.f;
-            q0 = Eigen::Quaternion<float>();
         }
 
         ros::spinOnce();
@@ -180,7 +182,7 @@ bool AttControl::init()
 
 bool AttControl::checkFeedback()
 {
-    if (imuReady && posReady && velReady) {
+    if (imuReady && posReady && velReady && odometryReady) {
         status = Status::sensorsReady;
     }
 }
@@ -245,10 +247,6 @@ bool AttControl::goToLocalPoint(Eigen::Vector3f r0)
     float thrust = regOutVec.norm() / TW / FREE_FALL_ACC_ABS;
     thrust = cutTwosidesFloat(thrust, MIN_THRUST, MAX_THRUST);
     pubCtrl(thrust, q0);
-
-    logData.debug1 = regOutVec[0];
-    logData.debug2 = regOutVec[1];
-    logData.debug3 = regOutVec[2];
 
     if (isZeroVector3f(dr, POSE_EPS)){
         return true;
@@ -371,18 +369,30 @@ void AttControl::subscribe()
   velSub = nodeHandle.subscribe(velTopicName, QUENUE_DEPTH, &AttControl::velCb, this);
   stateSub = nodeHandle.subscribe(stateTopicName, QUENUE_DEPTH, &AttControl::stateCb, this);
   odometrySub = nodeHandle.subscribe(odometryTopicName, QUENUE_DEPTH, &AttControl::odometryCb, this);
-  photonSub = nodeHandle.subscribe(photonTopicName, QUENUE_DEPTH, &AttControl::photonCmdCb, this);
+  photonCmdSub = nodeHandle.subscribe(photonCmdTopicName, QUENUE_DEPTH, &AttControl::photonCmdCb, this);
 }
 
 void AttControl::initPubs()
 {
     attPub = nodeHandle.advertise<geometry_msgs::PoseStamped>(setattTopicName, QUENUE_DEPTH);
     thrPub = nodeHandle.advertise<mavros_msgs::Thrust>(setthrTopicName, QUENUE_DEPTH);
+    thrPub = nodeHandle.advertise<mavros_msgs::Thrust>(setthrTopicName, QUENUE_DEPTH);
+    photonTmPub = nodeHandle.advertise<std_msgs::Float32MultiArray>(photonTmTopicName, QUENUE_DEPTH);
 }
 
 bool AttControl::sendIdling()
 {
     pubCtrl(MIN_THRUST, qPx);
+    return true;
+}
+
+bool AttControl::sendPhotonTm()
+{
+    std_msgs::Float32MultiArray msg;
+    msg.data.push_back(rEs[0]);
+    msg.data.push_back(rEs[1]);
+    msg.data.push_back(rEs[2]);
+    photonTmPub.publish(msg);
 }
 
 void AttControl::pubCtrl(float thr, const Eigen::Quaternion<float>& quat)
@@ -455,35 +465,26 @@ void AttControl::odometryCb(const nav_msgs::Odometry& msg)
                           msg.twist.twist.angular.y,
                           msg.twist.twist.angular.z);
 
-    odometryReceived = true;
+    odometryReady = true;
 }
 
 bool AttControl::estimateState(bool measured)
 {
-    odometryReceived = false;
     float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
+    bool goodOdometry = !isZeroVector3f(rOd) && !isZeroVector3f(vOd);
 
-    if (measured){
-        if (isZeroVector3f(rOd) || isZeroVector3f(vOd)){
-            PosVel pv = se.get(aPxClearI, dt, true);
-            rEs = pv.pos;
-            vEs = pv.vel;
-        }
-        else {
-        PosVel m = PosVel(rOd, vOd);
-        PosVel pv = se.get(m, aPxClearI, dt);
-        rEs = pv.pos;
-        vEs = pv.vel;
-        }
-    }
-    else{
-        PosVel pv = se.get(aPxClearI, dt);
-        rEs = pv.pos;
-        vEs = pv.vel;
-    }
+    Eigen::Vector2f xEstState = ekfX.get(rOd[0], vOd[0], aPxClearI[0], dt);
+    Eigen::Vector2f yEstState = ekfY.get(rOd[1], vOd[1], aPxClearI[1], dt);
+    Eigen::Vector2f zEstState = ekfZ.get(rOd[2], vOd[2], aPxClearI[2], dt);
+    rEs = Eigen::Vector3f(xEstState[0], yEstState[0], zEstState[0]);
+    vEs = Eigen::Vector3f(xEstState[1], yEstState[1], zEstState[1]);
+
+    logData.debug1 = dt;
+    logData.debug2 = measured;
+    logData.debug3 = status;
 }
 
-void AttControl::photonCmdCb(const std_msgs::UInt32MultiArray& msg)
+void AttControl::photonCmdCb(const std_msgs::Float32MultiArray& msg)
 {
 //     Command cmd = msg.data[0];
 //     switch(cmd){
@@ -502,6 +503,14 @@ void AttControl::photonCmdCb(const std_msgs::UInt32MultiArray& msg)
 //         case Command::land:
 //             break;
 //     }
+
+    Eigen::Vector3f r = Eigen::Vector3f(msg.data[0], msg.data[1], msg.data[2]);
+    if (!isZeroVector3f(r0-r)) {
+        r0 = r;
+        aimAccepted = true;
+        logger.addEvent("AttCtrl: new aim accepted", timeMs);
+        std::cout << r0 << std::endl << std::endl;
+    }
 }
 
 

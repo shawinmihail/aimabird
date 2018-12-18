@@ -55,10 +55,14 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(aimabird_node src/main.cpp)
+add_executable(aimabird_control src/start_control.cpp)
+add_executable(aimabird_replay src/replay.cpp)
 add_library(aimabird src/AttControl.cpp)
 #add_library(px4math src/Matrix/matrix/math.hpp)
 
 target_link_libraries(
-    aimabird_node aimabird ${GAZEBO_LIBRARIES} ${catkin_LIBRARIES}
+    aimabird_control aimabird ${GAZEBO_LIBRARIES} ${catkin_LIBRARIES}
+)
+target_link_libraries(
+    aimabird_replay aimabird ${GAZEBO_LIBRARIES} ${catkin_LIBRARIES}
 )
