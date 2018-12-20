@@ -1,3 +1,5 @@
 *.kdev
 *.log
 *.csv
+.idea/
+*.idea

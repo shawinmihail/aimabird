@@ -12,3 +12,5 @@ add to white list of /bila-sdk/common/pluginlists.yaml
 rosrun aimabird aimabird_control
 rosrun aimabird aimbird_example.py
 
+# plot
+use logplot.py to see logs

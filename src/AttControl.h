@@ -45,6 +45,12 @@ enum Command {
     land
 };
 
+enum YawStrategy {
+    constant,
+    onAim,
+    aboutAim
+};
+
 class AttControl {
 
 public:
@@ -69,9 +75,10 @@ private:
     bool setOffboard();
     bool arm();
     bool takeoff();
-    bool goToLocalPoint(Eigen::Vector3f r0);
+    bool goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy, float yawStrategyParam);
     bool goOnRoute(std::vector<Eigen::Vector3f> route); //TODO not implemented yet
     bool goRelativePosition(Eigen::Vector3f r0);
+    bool goWithVelocity(float h, Eigen::Vector3f v0, YawStrategy strategy, float yawStrategyParam);
     bool goWithAcc(Eigen::Vector3f a0);
     bool accomulateVelocityWithImu(Eigen::Vector3f v0);
     bool accomulateVelocityWithImu(float vz);
@@ -135,6 +142,7 @@ private:
     Eigen::Vector3f oOd;
 
     Eigen::Quaternion<float> q0;
+    float yaw0;
     Eigen::Vector3f r0;
     bool aimAccepted;
 

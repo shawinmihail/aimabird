@@ -89,9 +89,6 @@ Eigen::Quaternion<float> quatFromDirAndYaw(const Eigen::Vector3f v, float yaw, f
     }
 
     Eigen::Vector3f pin = UNIT_Z.cross(v);
-//     if (isZeroVector3f(pin), 1e-6){
-//         return qYaw;
-//     }
     pin.normalize();
     float cosA = v.normalized().dot(UNIT_Z);
     cosA = cutAbsFloat(cosA, 1.f - 1e-9); // check if |cosA| < 1 for avoid acos -> Nan
@@ -107,22 +104,39 @@ Eigen::Quaternion<float> quatFromDirAndYaw(const Eigen::Vector3f v, float yaw, f
     return qBow*qYaw;
 }
 
-Eigen::Quaternion<float> quatFromDir(const Eigen::Vector3f v, const Eigen::Vector3f dir, float bowLimit=PI){
+float yawOnAim(const Eigen::Vector3f& drH) {
 
-    Eigen::Vector3f pin = v.cross(dir);
-    pin.normalize();
-    float cosA = v.normalized().dot(dir.normalized());
-    cosA = cutAbsFloat(cosA, 1.f - 1e-3); // check if |cosA| < 1 for avoid acos -> Nan
+    float cosA = UNIT_X.dot(drH.normalized());
+    cosA = cutAbsFloat(cosA, 1.f - 1e-9); // check if |cosA| < 1 for avoid acos -> Nan
     float A = acos(cosA);
-    if(v[2] * dir[2] < 0){ // check it
+    if(drH[1] < 0){ // check it
         A = -A;
     }
-    A = cutAbsFloat(A, bowLimit)    ;
-    float sinHalfA = sin(A / 2.f);
+    return A;
+}
 
-    Eigen::Quaternion<float> qBow = Eigen::Quaternion<float>(cos(A/2.f), sinHalfA*pin[0], sinHalfA*pin[1], sinHalfA*pin[2]);
+Eigen::Vector3f toYawPitchRoll(const Eigen::Quaternionf& q)
+{
+    Eigen::Vector3f yawPitchRoll;
 
-    return qBow;
+    float x = q.y();
+    float y = q.z();
+    float z = q.x();
+    float w = q.w();
+
+    yawPitchRoll[2] = atan2(2.0f * (y * z + w * x), w * w - x * x - y * y + z * z);
+    yawPitchRoll[1] = asin(-2.0f * (x * z - w * y));
+    yawPitchRoll[0] = atan2(2.0f * (x * y + w * z), w * w + x * x - y * y - z * z);
+
+    return yawPitchRoll;
+}
+
+float slowYaw(float yaw0, Eigen::Quaternionf q, float yawRate, float dt) {
+    float yaw = (toYawPitchRoll(q))[0];
+    if (isZeroFloat(yaw0 - yaw)){
+        return yaw;
+    }
+    return yaw0 + yawRate * dt;
 }
 
 class IntegratorFloat{

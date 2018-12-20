@@ -9,6 +9,7 @@ const int QUENUE_DEPTH = 10;                                                // r
 const float FREE_FALL_ACC_ABS = 10.f;                                        // free fall acc approx
 const float PI = 3.1415f;                                                     // math Pi
 const Eigen::Vector3f UNIT_Z(0.f, 0., 1.f);                                   // z unit vector
+const Eigen::Vector3f UNIT_X(1.f, 0., 0.f);                                   // z unit vector
 
 const int CTRL_RATE = 100;                                                   //control rate in HZ
 const float MIN_TICK_FOR_CALCS = 1.f/CTRL_RATE;                                //min dt for integrator, differentiator and other math
@@ -19,18 +20,19 @@ const float MAX_THRUST = 0.8f;                                               // 
 const float TW = 1.7f;                                                       // aprox thrust / weight ratio
 
 // goToLocal params
-const float GO_LOCAL_INPUT_LIM_V = 0.5f;                                        // cut dr on GO_LOCAL_INPUT_ERROR_LIM
+const float GO_LOCAL_INPUT_LIM_V = 1.5f;                                        // cut dr on GO_LOCAL_INPUT_ERROR_LIM
 const float GO_LOCAL_PID_P_V = 1.f;                                            // position error -> thrust PID proportional
 const float GO_LOCAL_PID_I_V = 0.2f;                                           // position error -> thrust PID integral
 const float GO_LOCAL_PID_I_LIM_V = 6.f;                                           // position error -> thrust PID integral
 const float GO_LOCAL_PID_D_V = 1.8f;                                            // position error -> thrust PID integral
 const float GO_LOCAL_ANTIWINDUP_PARAM_V = 0.3f;                                // integrator part raises only when z*vz < GO_LOCAL_ANTIWINDUP_COEFF
 
-const float GO_LOCAL_INPUT_LIM_H = 0.5f;                                          // cut dr on GO_LOCAL_INPUT_ERROR_LIM vertical
+const float GO_LOCAL_INPUT_LIM_H = 1.5f;                                          // cut dr on GO_LOCAL_INPUT_ERROR_LIM vertical
 const float GO_LOCAL_PID_P_H = 0.4f;                                            // position error -> thrust PID proportional
 const float GO_LOCAL_PID_D_H = 1.4f;                                            // position error -> thrust PID differential
 
-const float POSE_EPS = 0.3f;
+const float POSE_EPS = 0.5f;
+const float YAW_RATE_DES = 0.05f;
 
 // accumulateVelocityWithImu params
 const float ACCUM_VEL_PID_P = 0.33f;                                          // imu estimated velocity -> thrust proportional coeff
