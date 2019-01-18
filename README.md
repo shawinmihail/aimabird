@@ -14,3 +14,10 @@ rosrun aimabird aimbird_example.py
 
 # plot
 use logplot.py to see logs
+
+# world
+be shure that your gazebo world file have acceptable ode solver properties like
+<iters>200</iters>
+<max_step_size>0.001</max_step_size>
+<real_time_factor>1</real_time_factor>
+<real_time_update_rate>1000</real_time_update_rate>
