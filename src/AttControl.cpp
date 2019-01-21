@@ -30,6 +30,7 @@ AttControl::AttControl():
 ,waitCounter(0)
 
 ,yaw0(0.f)
+,yawRate0(0.f)
 {}
 
 
@@ -112,7 +113,7 @@ void AttControl::prepareToFly()
 
                 case Status::tookoff:
                     if (aimAccepted){
-                        done = goWithVelocity(3.f, r0, YawStrategy::onAim, 0.f);
+                        done = goWithVelocity(3.f, r0, YawStrategy::rotation, yawRate0);
                     }
                     else{
                         goToLocalPoint(Eigen::Vector3f (0.f, 0.f, 3.0f), YawStrategy::constant, 0.f);
@@ -216,7 +217,7 @@ bool AttControl::takeoff(){ // testing
 //     pubCtrl(thrust, qPx);
 }
 
-bool AttControl::goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy = YawStrategy::constant, float yawStrategyParam = 0.f)
+bool AttControl::goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy, float yawStrategyParam)
 {
     float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
 
@@ -244,6 +245,7 @@ bool AttControl::goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy = YawSt
     Eigen::Vector3f drH = Eigen::Vector3f(dr[0], dr[1], 0.f);
 
     float yawDes = 0.f;
+    float yawCurrent = (toYawPitchRoll(qPx))[0];
     switch (strategy) {
         case YawStrategy::constant:
             yawDes = yawStrategyParam;
@@ -253,21 +255,35 @@ bool AttControl::goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy = YawSt
             if (!isZeroVector3f(drH, POSE_EPS)){
                 yawDes = yawOnAim(drH);
             }
+            else{
+                yawDes = yaw0;
+            }
             break;
 
         case YawStrategy::aboutAim:
-            yawDes = yawStrategyParam;
+            if (!isZeroVector3f(drH, POSE_EPS)){
+                yawDes = yawOnAim(drH);
+                yawDes += yawStrategyParam * cos(YAW_RATE_DES * timeMs / 1e3f);
+            }
+            else{
+                yawDes = yaw0;
+            }
+            break;
+
+        case YawStrategy::rotation:
+            yaw0 += yawStrategyParam * dt;
+            yawDes = yaw0;
             break;
     }
 
-    float yawCurrent = (toYawPitchRoll(qPx))[0];
     float dYaw = yawDes - yaw0;
     if (!isZeroFloat(dYaw)){
-        yaw0 += dYaw * YAW_RATE_DES * dt;
+        yaw0 += dYaw * YAW_RATE_DES * dt / fabs(dYaw);
     }
 
-    //std::cout << "y0: " << yaw0 << std::endl << std::endl;
-    //std::cout << "ys: " << yawDes << std::endl << std::endl;
+//     std::cout << "y0: " << yaw0 << std::endl << std::endl;
+//     std::cout << "ys: " << yawDes << std::endl << std::endl;
+//     std::cout << "yd: " << dYaw << std::endl << std::endl;
 
 
     q0 = quatFromDirAndYaw(regOutVec, yaw0, 5.f*PI/ 180.f);
@@ -281,10 +297,11 @@ bool AttControl::goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy = YawSt
     return false;
 }
 
-bool AttControl::goWithVelocity(float h, Eigen::Vector3f v0, YawStrategy strategy = YawStrategy::constant, float yawStrategyParam = 0.f)
+bool AttControl::goWithVelocity(float h, Eigen::Vector3f v0, YawStrategy strategy, float yawStrategyParam)
 {
     float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
 
+    v0 = quatRotate(qPx.inverse(), v0);
     Eigen::Vector3f r = rPx;
     Eigen::Vector3f dr(0.f, 0.f, h-r[2]);
     Eigen::Vector3f v = vPx;
@@ -305,8 +322,10 @@ bool AttControl::goWithVelocity(float h, Eigen::Vector3f v0, YawStrategy strateg
     /** **/
     Eigen::Vector3f regOutVec = P + I + D + Eigen::Vector3f(0., 0., FREE_FALL_ACC_ABS);
 
+    //regOutVec = quatRotate(qPx, regOutVec); !!!!!!!!!!!!!!!
+
     /* yaw */
-    Eigen::Vector3f dvH = Eigen::Vector3f(dv[0], dv[1], 0.f);
+    Eigen::Vector3f vH = Eigen::Vector3f(v0[0], v0[1], 0.f);
 
     float yawDes = 0.f;
     switch (strategy) {
@@ -315,13 +334,27 @@ bool AttControl::goWithVelocity(float h, Eigen::Vector3f v0, YawStrategy strateg
             break;
 
         case YawStrategy::onAim:
-            if (!isZeroVector3f(dvH, POSE_EPS)){
-                yawDes = yawOnAim(dvH);
+            if (!isZeroVector3f(vH, EST_VEL_EPS)){
+                yawDes = yawOnAim(vH);
+            }
+            else{
+                yawDes = yaw0;
             }
             break;
 
         case YawStrategy::aboutAim:
-            yawDes = yawStrategyParam;
+            if (!isZeroVector3f(vH, POSE_EPS)){
+                yawDes = yawOnAim(vH);
+                yawDes += yawStrategyParam * cos(YAW_RATE_DES * timeMs / 1e3f);
+            }
+            else{
+                yawDes = yaw0;
+            }
+            break;
+
+        case YawStrategy::rotation:
+            yaw0 += yawStrategyParam * dt;
+            yawDes = yaw0;
             break;
     }
 
@@ -347,7 +380,7 @@ bool AttControl::goRelativePosition(Eigen::Vector3f r0)
 {
     Eigen::Vector3f r = rPx;
     r0 = r + r0;
-    return goToLocalPoint(r0);
+    return false;
 }
 
 
@@ -595,6 +628,7 @@ void AttControl::photonCmdCb(const std_msgs::Float32MultiArray& msg)
     Eigen::Vector3f r = Eigen::Vector3f(msg.data[0], msg.data[1], msg.data[2]);
     if (!isZeroVector3f(r0-r)) {
         r0 = r;
+        yawRate0 = msg.data[3];
         aimAccepted = true;
         logger.addEvent("AttCtrl: new aim accepted", timeMs);
     }

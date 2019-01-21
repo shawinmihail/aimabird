@@ -32,14 +32,17 @@ const float GO_LOCAL_PID_P_H = 0.4f;                                            
 const float GO_LOCAL_PID_D_H = 1.4f;                                            // position error -> thrust PID differential
 
 const float POSE_EPS = 0.5f;
-const float YAW_RATE_DES = 0.05f;
+const float YAW_RATE_DES = 0.2f;
 
 // accumulateVelocityWithImu params
 const float ACCUM_VEL_PID_P = 0.33f;                                          // imu estimated velocity -> thrust proportional coeff
 const float ACCUM_VEL_PID_P_ERROR_LIM = 0.5f;                                // imu estimated velocity -> thrust proportional out limit
 const float ACCUM_VEL_PID_I = 1.f;                                           // imu estimated velocity -> thrust integral coeff
 const float ACCUM_VEL_PID_I_ERROR_LIM = 0.2f;                                // imu estimated velocity -> thrust integral out limit
-const float EST_VEL_EPS = 0.1f;                                             // epsilon to float comparison vel and desired vel
+const float EST_VEL_EPS = 0.05f;                                             // epsilon to float comparison vel and desired vel
 
 /* EKF */
+
+/* path planner */
+const float CELL_SIZE = 0.05;
 

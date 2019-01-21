@@ -48,7 +48,8 @@ enum Command {
 enum YawStrategy {
     constant,
     onAim,
-    aboutAim
+    aboutAim,
+    rotation
 };
 
 class AttControl {
@@ -144,6 +145,7 @@ private:
     Eigen::Quaternion<float> q0;
     float yaw0;
     Eigen::Vector3f r0;
+    float yawRate0;
     bool aimAccepted;
 
     Status status;

@@ -55,8 +55,8 @@ class AttitudeController:
 
     def send_target(self):
         msg = PoseStamped()
-        msg.pose.position.x = 45.
-        msg.pose.position.y = 10.
+        msg.pose.position.x = 3.
+        msg.pose.position.y = 0.
         msg.pose.position.z = 0.
         msg.pose.orientation.w = 1.
         msg.pose.orientation.x = 0.
@@ -67,8 +67,12 @@ class AttitudeController:
         self.target_pub.publish(msg)
 
     def main(self):
-        #self.send_target()
+        self.send_target()
         self.time = rospy.Time.now()
+
+        yaw_rate = 0.3  # rad / s
+        self.send_cmd([0.3, 0., 0., yaw_rate])  # test yaw rate
+        return
 
         if self.r is None:  # wait telemetry
             print("waiting r")
@@ -91,9 +95,9 @@ class AttitudeController:
         else:
             return None
 
-    def send_cmd(self, point):
+    def send_cmd(self, cmd0):
         cmd = Float32MultiArray()
-        cmd.data = [point[0], point[1], point[2]]
+        cmd.data = [cmd0[0], cmd0[1], cmd0[2], cmd0[3]]
         self.cmd_pub.publish(cmd)
 
     def point_reached(self, radius=0.5):
