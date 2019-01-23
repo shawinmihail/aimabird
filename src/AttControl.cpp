@@ -360,6 +360,7 @@ bool AttControl::goWithVelocity(float h, Eigen::Vector3f v0, YawStrategy strateg
 
     float yawCurrent = (toYawPitchRoll(qPx))[0];
     float dYaw = yawDes - yaw0;
+    dYaw = cutAbsFloat(dYaw, PI);
     if (!isZeroFloat(dYaw)){
         yaw0 += dYaw * YAW_RATE_DES * dt;
     }
@@ -626,12 +627,11 @@ void AttControl::photonCmdCb(const std_msgs::Float32MultiArray& msg)
 //     }
 
     Eigen::Vector3f r = Eigen::Vector3f(msg.data[0], msg.data[1], msg.data[2]);
-    if (!isZeroVector3f(r0-r)) {
-        r0 = r;
-        yawRate0 = msg.data[3];
-        aimAccepted = true;
-        logger.addEvent("AttCtrl: new aim accepted", timeMs);
-    }
+    r0 = r;
+    yawRate0 = msg.data[3];
+    aimAccepted = true;
+    logger.addEvent("AttCtrl: new aim accepted", timeMs);
+
 }
 
 

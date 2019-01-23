@@ -127,6 +127,7 @@ private:
     Eigen::Vector3f rPx;
     Eigen::Vector3f vPx;
     Eigen::Vector3f aPx;
+    Eigen::Vector3f oPx;
     Eigen::Vector3f aPxClearI;
     Eigen::Vector3f gIestimated;
     bool gIinited;
