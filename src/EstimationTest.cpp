@@ -1,6 +1,6 @@
-#include "AttControl.h"
+#include "EstimationTest.h"
 
-AttControl::AttControl():
+EstimationTest::EstimationTest():
  imuTopicName("/mavros/imu/data")
 ,posTopicName("mavros/local_position/pose")
 ,velTopicName("/mavros/local_position/velocity")
@@ -34,12 +34,12 @@ AttControl::AttControl():
 {}
 
 
-void AttControl::main()
+void EstimationTest::main()
 {
 
 }
 
-void AttControl::clockTick()
+void EstimationTest::clockTick()
 {
         timeMs =  std::chrono::duration_cast<std::chrono::milliseconds>(
                   std::chrono::high_resolution_clock::now() - initTime).count();
@@ -47,7 +47,7 @@ void AttControl::clockTick()
         lastTickMs = timeMs;
 }
 
-void AttControl::prepareToFly()
+void EstimationTest::prepareToFly()
 {
     while (ros::ok){
 
@@ -73,79 +73,24 @@ void AttControl::prepareToFly()
                     }
                     else{
                         logger.addEvent("AttCtrl: waiting feedback ...", timeMs);
-                        wait(1);
-                    }
-                    break;
-
-                case Status::sensorsReady:
-                    done = setOffboard();
-                    done = done & mavState.mode == OFFBOARD;
-                    if (done){
-                        logger.addEvent("AttCtrl: offboarded", timeMs);
-                        status = Status::offboarded;
-                    }
-                    else {
-                        logger.addEvent("AttCtrl: offboarding ...", timeMs);
-                        wait(1);
-                    }
-                    break;
-
-                case Status::offboarded:
-                    done = arm();
-                    done = done & mavState.armed;
-                    if (done){
-                        logger.addEvent("AttCtrl: armed", timeMs);
-                        status = Status::armed;
-                    }
-                    else{
-                        logger.addEvent("AttCtrl: arming ...", timeMs);
-                        wait(1);
-                    }
-                    break;
-
-                case Status::armed:
-                    done = goToLocalPoint(Eigen::Vector3f (0.f, 0.f, 3.0f), YawStrategy::constant, 0.f);
-                    if (done) {
-                        logger.addEvent("AttCtrl: tookoff", timeMs);
-                        status = Status::tookoff;
-                    }
-                    break;
-
-                case Status::tookoff:
-                    if (aimAccepted){
-                        done = goWithVelocity(3.f, r0, YawStrategy::rotation, yawRate0);
-                    }
-                    else{
-                        goToLocalPoint(Eigen::Vector3f (0.f, 0.f, 3.0f), YawStrategy::constant, 0.f);
-                    }
-
-                    break;
-
-                case Status::stabilized:
-//                     done = accomulateVelocityWithImu(Eigen::Vector3f (0.f, 0.f, 0.0f));
-                    if (done) {
-                        logger.addEvent("AttCtrl: stabilized");
-                        status = Status::stabilized;
+                        wait(2);
                     }
                     break;
             }
         }
 
-        if (status >= Status::armed){
+        if (status == Status::sensorsReady){
             estimateState(odometryReady);
-            sendPhotonTm();
             writeLogData();
         }
-        if (status >= Status::sensorsReady && status < Status::armed) {
-            sendIdling(); // send min thrust before flight to able offboard / arm
-        }
+
 
         ros::spinOnce();
         rate.sleep();
     }
 }
 
-void AttControl::checkSensors()
+void EstimationTest::checkSensors()
 {
     bool done = checkFeedback();
     if (done){
@@ -157,12 +102,12 @@ void AttControl::checkSensors()
     }
 }
 
-void AttControl::wait(int s)
+void EstimationTest::wait(int s)
 {
     waitCounter = s * CTRL_RATE;
 }
 
-bool AttControl::waiting()
+bool EstimationTest::waiting()
 {
     if (waitCounter > 0){
         waitCounter --;
@@ -171,7 +116,7 @@ bool AttControl::waiting()
     return false;
 }
 
-bool AttControl::init()
+bool EstimationTest::init()
 {
   subscribe();
   initPubs();
@@ -179,14 +124,14 @@ bool AttControl::init()
   return true;
 }
 
-bool AttControl::checkFeedback()
+bool EstimationTest::checkFeedback()
 {
-    if (imuReady && posReady && velReady && true) {
+    if (imuReady &&  odometryReady) {
         status = Status::sensorsReady;
     }
 }
 
-bool AttControl::setOffboard()
+bool EstimationTest::setOffboard()
 {
     mavros_msgs::SetMode setModeMessage;
     setModeMessage.request.custom_mode = "OFFBOARD";
@@ -198,7 +143,7 @@ bool AttControl::setOffboard()
     return false;
 }
 
-bool AttControl::arm()
+bool EstimationTest::arm()
 {
     mavros_msgs::CommandBool armingMsg;
     armingMsg.request.value = true;
@@ -207,7 +152,7 @@ bool AttControl::arm()
     return res;
 }
 
-bool AttControl::takeoff(){ // testing
+bool EstimationTest::takeoff(){ // testing
 
 //     Eigen::Vector3f r0(0., 0., 10.);
 //     Eigen::Vector3f dr = r0 - rPx;
@@ -217,7 +162,7 @@ bool AttControl::takeoff(){ // testing
 //     pubCtrl(thrust, qPx);
 }
 
-bool AttControl::goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy, float yawStrategyParam)
+bool EstimationTest::goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy, float yawStrategyParam)
 {
     float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
 
@@ -297,7 +242,7 @@ bool AttControl::goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy, float 
     return false;
 }
 
-bool AttControl::goWithVelocity(float h, Eigen::Vector3f v0, YawStrategy strategy, float yawStrategyParam)
+bool EstimationTest::goWithVelocity(float h, Eigen::Vector3f v0, YawStrategy strategy, float yawStrategyParam)
 {
     float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
 
@@ -375,7 +320,7 @@ bool AttControl::goWithVelocity(float h, Eigen::Vector3f v0, YawStrategy strateg
     return false;
 }
 
-bool AttControl::goRelativePosition(Eigen::Vector3f r0)
+bool EstimationTest::goRelativePosition(Eigen::Vector3f r0)
 {
     Eigen::Vector3f r = rPx;
     r0 = r + r0;
@@ -383,7 +328,7 @@ bool AttControl::goRelativePosition(Eigen::Vector3f r0)
 }
 
 
-bool AttControl::goWithAcc(Eigen::Vector3f a0) // TODO remake
+bool EstimationTest::goWithAcc(Eigen::Vector3f a0) // TODO remake
 {
     Eigen::Vector3f a = aPxClearI;
 
@@ -404,7 +349,7 @@ bool AttControl::goWithAcc(Eigen::Vector3f a0) // TODO remake
     return true;
 }
 
-bool AttControl::accomulateVelocityWithImu(Eigen::Vector3f v0) // TODO how remove small oscilations?
+bool EstimationTest::accomulateVelocityWithImu(Eigen::Vector3f v0) // TODO how remove small oscilations?
 {   /* d time for calc */
     float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
 
@@ -440,7 +385,7 @@ bool AttControl::accomulateVelocityWithImu(Eigen::Vector3f v0) // TODO how remov
     return false;
 }
 
-bool AttControl::accomulateVelocityWithImu(float vz) // TODO dont ready yet
+bool EstimationTest::accomulateVelocityWithImu(float vz) // TODO dont ready yet
 {   /* d time for calc */
 //     float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
 //
@@ -476,23 +421,23 @@ bool AttControl::accomulateVelocityWithImu(float vz) // TODO dont ready yet
     return false;
 }
 
-void AttControl::initServs()
+void EstimationTest::initServs()
 {
     modeService = nodeHandle.serviceClient<mavros_msgs::SetMode>(setmodeServiceName);
     armService = nodeHandle.serviceClient<mavros_msgs::CommandBool>(armServiceName);
 }
 
-void AttControl::subscribe()
+void EstimationTest::subscribe()
 {
-  imuSub = nodeHandle.subscribe(imuTopicName, QUENUE_DEPTH, &AttControl::imuCb, this);
-  posSub = nodeHandle.subscribe(posTopicName, QUENUE_DEPTH, &AttControl::posCb, this);
-  velSub = nodeHandle.subscribe(velTopicName, QUENUE_DEPTH, &AttControl::velCb, this);
-  stateSub = nodeHandle.subscribe(stateTopicName, QUENUE_DEPTH, &AttControl::stateCb, this);
-  odometrySub = nodeHandle.subscribe(odometryTopicName, QUENUE_DEPTH, &AttControl::odometryCb, this);
-  photonCmdSub = nodeHandle.subscribe(photonCmdTopicName, QUENUE_DEPTH, &AttControl::photonCmdCb, this);
+  imuSub = nodeHandle.subscribe(imuTopicName, QUENUE_DEPTH, &EstimationTest::imuCb, this);
+  posSub = nodeHandle.subscribe(posTopicName, QUENUE_DEPTH, &EstimationTest::posCb, this);
+  velSub = nodeHandle.subscribe(velTopicName, QUENUE_DEPTH, &EstimationTest::velCb, this);
+  stateSub = nodeHandle.subscribe(stateTopicName, QUENUE_DEPTH, &EstimationTest::stateCb, this);
+  odometrySub = nodeHandle.subscribe(odometryTopicName, QUENUE_DEPTH, &EstimationTest::odometryCb, this);
+  photonCmdSub = nodeHandle.subscribe(photonCmdTopicName, QUENUE_DEPTH, &EstimationTest::photonCmdCb, this);
 }
 
-void AttControl::initPubs()
+void EstimationTest::initPubs()
 {
     attPub = nodeHandle.advertise<geometry_msgs::PoseStamped>(setattTopicName, QUENUE_DEPTH);
     thrPub = nodeHandle.advertise<mavros_msgs::Thrust>(setthrTopicName, QUENUE_DEPTH);
@@ -500,13 +445,13 @@ void AttControl::initPubs()
     photonTmPub = nodeHandle.advertise<std_msgs::Float32MultiArray>(photonTmTopicName, QUENUE_DEPTH);
 }
 
-bool AttControl::sendIdling()
+bool EstimationTest::sendIdling()
 {
     pubCtrl(MIN_THRUST, qPx);
     return true;
 }
 
-bool AttControl::sendPhotonTm()
+bool EstimationTest::sendPhotonTm()
 {
     std_msgs::Float32MultiArray msg;
     msg.data.push_back(rPx[0]);
@@ -515,7 +460,7 @@ bool AttControl::sendPhotonTm()
     photonTmPub.publish(msg);
 }
 
-void AttControl::pubCtrl(float thr, const Eigen::Quaternion<float>& quat)
+void EstimationTest::pubCtrl(float thr, const Eigen::Quaternion<float>& quat)
 {
     ros::Time now = ros::Time::now();
     geometry_msgs::PoseStamped quatMsg;
@@ -538,7 +483,7 @@ void AttControl::pubCtrl(float thr, const Eigen::Quaternion<float>& quat)
     attPub.publish(quatMsg);
 }
 
-void AttControl::imuCb(const sensor_msgs::Imu& msg)
+void EstimationTest::imuCb(const sensor_msgs::Imu& msg)
 {
     aPx = Eigen::Vector3f(msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z);
     qPx = Eigen::Quaternion<float>(msg.orientation.w, msg.orientation.x, msg.orientation.y, msg.orientation.z);
@@ -552,24 +497,24 @@ void AttControl::imuCb(const sensor_msgs::Imu& msg)
     imuReady = true;
 }
 
-void AttControl::velCb(const geometry_msgs::TwistStamped& msg)
+void EstimationTest::velCb(const geometry_msgs::TwistStamped& msg)
 {
     vPx = Eigen::Vector3f(msg.twist.linear.x, msg.twist.linear.y, msg.twist.linear.z);
     velReady = true;
 }
 
-void AttControl::posCb(const geometry_msgs::PoseStamped& msg)
+void EstimationTest::posCb(const geometry_msgs::PoseStamped& msg)
 {
     rPx = Eigen::Vector3f(msg.pose.position.x, msg.pose.position.y, msg.pose.position.z);
     posReady = true;
 }
 
-void AttControl::stateCb(const mavros_msgs::State& msg)
+void EstimationTest::stateCb(const mavros_msgs::State& msg)
 {
     mavState = msg;
 }
 
-void AttControl::odometryCb(const nav_msgs::Odometry& msg)
+void EstimationTest::odometryCb(const nav_msgs::Odometry& msg)
 {
     qOd = Eigen::Quaternion<float>(msg.pose.pose.orientation.w,
                                    msg.pose.pose.orientation.x,
@@ -588,7 +533,7 @@ void AttControl::odometryCb(const nav_msgs::Odometry& msg)
     odometryReady = true;
 }
 
-bool AttControl::estimateState(bool measured)
+bool EstimationTest::estimateState(bool measured)
 {
     float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
     bool goodOdometry = !isZeroVector3f(rOd) && !isZeroVector3f(vOd);
@@ -604,7 +549,7 @@ bool AttControl::estimateState(bool measured)
     logData.debug3 = status;
 }
 
-void AttControl::photonCmdCb(const std_msgs::Float32MultiArray& msg)
+void EstimationTest::photonCmdCb(const std_msgs::Float32MultiArray& msg)
 {
 //     Command cmd = msg.data[0];
 //     switch(cmd){
@@ -632,8 +577,7 @@ void AttControl::photonCmdCb(const std_msgs::Float32MultiArray& msg)
 
 }
 
-
-void AttControl::writeLogData()
+void EstimationTest::writeLogData()
 {
     std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(
     std::chrono::system_clock::now().time_since_epoch()
@@ -642,11 +586,8 @@ void AttControl::writeLogData()
 
 //     logData.timeMs = uint64_t(ros::Time::now().toSec() * 1e3);
 
-    logData.qPx = qPx;
-    logData.rPx = rPx;
-    logData.vPx = vPx;
     logData.aPx = aPxClearI;
-
+    logData.qOd = qOd;
     logData.rOd = rOd;
     logData.vOd = vOd;
 

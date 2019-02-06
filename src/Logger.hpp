@@ -47,13 +47,13 @@ public:
         std::stringstream ss;
 
         ss << timeMs << ",";
-        ss << quaternionToStr(qPx);
-        ss << vector3fToStr(rPx);
-        ss << vector3fToStr(vPx);
+//         ss << quaternionToStr(qPx);
+//         ss << vector3fToStr(rPx);
+//         ss << vector3fToStr(vPx);
         ss << vector3fToStr(aPx);
-        ss << vector3fToStr(oPx);
+//         ss << vector3fToStr(oPx);
 
-//         ss << quaternionToStr(qGz);
+        ss << quaternionToStr(qOd);
         ss << vector3fToStr(rOd);
         ss << vector3fToStr(vOd);
 
@@ -68,10 +68,10 @@ public:
 //         ss << vector3fToStr(a0);
 //         ss << vector3fToStr(o0);
 
-        ss << debug1  << ",";
-        ss << debug2  << ",";
-        ss << debug3  << ",";
-        ss << debug4  << ",";
+//         ss << debug1  << ",";
+//         ss << debug2  << ",";
+//         ss << debug3  << ",";
+//         ss << debug4  << ",";
         ss << "\n";
 
         return ss.str();
@@ -82,13 +82,13 @@ public:
 
         ss << nameOf(timeMs) << ",";
 
-        ss << quaternionNameToStr(nameOf(qPx));
-        ss << vector3fNameToStr(nameOf(rPx));
-        ss << vector3fNameToStr(nameOf(vPx));
+//         ss << quaternionNameToStr(nameOf(qPx));
+//         ss << vector3fNameToStr(nameOf(rPx));
+//         ss << vector3fNameToStr(nameOf(vPx));
         ss << vector3fNameToStr(nameOf(aPx));
-        ss << vector3fNameToStr(nameOf(oPx));
+//         ss << vector3fNameToStr(nameOf(oPx));
 
-//         ss << quaternionNameToStr(nameOf(qGz));
+        ss << quaternionNameToStr(nameOf(qOd));
         ss << vector3fNameToStr(nameOf(rOd));
         ss << vector3fNameToStr(nameOf(vOd));
 
@@ -103,10 +103,10 @@ public:
 //         ss << vector3fNameToStr(nameOf(a0));
 //         ss << vector3fNameToStr(nameOf(o0));
 
-        ss << nameOf(debug1) << ",";
-        ss << nameOf(debug2) << ",";
-        ss << nameOf(debug3) << ",";
-        ss << nameOf(debug4) << ",";
+//         ss << nameOf(debug1) << ",";
+//         ss << nameOf(debug2) << ",";
+//         ss << nameOf(debug3) << ",";
+//         ss << nameOf(debug4) << ",";
         ss << "\n";
 
         return ss.str();
