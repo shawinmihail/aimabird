@@ -128,7 +128,9 @@ bool EstimationTest::checkFeedback()
 {
     if (imuReady &&  odometryReady) {
         status = Status::sensorsReady;
+        return true;
     }
+    return false;
 }
 
 bool EstimationTest::setOffboard()
@@ -582,18 +584,15 @@ void EstimationTest::writeLogData()
     std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(
     std::chrono::system_clock::now().time_since_epoch()
     );
+
     logData.timeMs = ms.count();
-
 //     logData.timeMs = uint64_t(ros::Time::now().toSec() * 1e3);
-
     logData.aPx = aPxClearI;
     logData.qOd = qOd;
     logData.rOd = rOd;
     logData.vOd = vOd;
-
     logData.rEs = rEs;
     logData.vEs = vEs;
-
     logData.q0 = q0;
 
     logger.addData(logData);
