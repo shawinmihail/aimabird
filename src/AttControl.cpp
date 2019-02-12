@@ -129,7 +129,7 @@ void AttControl::prepareToFly()
 
                 case Status::tookoff:
                     if (aimAccepted){
-                        done = goWithVelocity2D(5.f, Eigen::Vector3f (0.5f, 0.f, .0f), 0.3);
+                        done = goWithVelocity2D(5.f, rInput, yawRateInput);
                     }
                     else{
                         goToLocalPoint(Eigen::Vector3f (0.f, 0.f, 5.0f), YawStrategy::constant, -PI/2.f);
@@ -347,9 +347,9 @@ bool AttControl::goWithVelocity2D(float h, Eigen::Vector3f v0, float yawRate){
     if (!yawRateCtrlMode){
         yawRateCtrlMode = true;
         yawPointerForRotate = yaw;
-        std::cout << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << yawPointerForRotate << std::endl << std::endl;
-        std::cout << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << e << std::endl << std::endl;
-        printQuat(qPx);
+//         std::cout << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << yawPointerForRotate << std::endl << std::endl;
+//         std::cout << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << e << std::endl << std::endl;
+//         printQuat(qPx);
     }
 
     yawPointerForRotate += yawRate * dt;
@@ -702,8 +702,7 @@ void AttControl::writeLogData()
     logData.vOd = vOd;
     logData.rEs = rEs;
     logData.vEs = vEs;
-
-    logData.r0 = qPx.toRotationMatrix().eulerAngles(2, 1, 0);
+    logData.r0 = quat2Eul(qPx);
 
     logger.addData(logData);
 }
