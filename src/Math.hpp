@@ -4,6 +4,14 @@
 #include <limits>
 #include <cmath>
 #include "Params.h"
+#include <iostream>
+#include <stdio.h>
+#include <iostream>
+#include <string>
+
+void printQuat(const Eigen::Quaternion<float>& q, std::string name="q:\n"){
+    std::cout << name << q.w() << "\n" << q.x() << "\n" << q.y() << "\n" << q.z() << "\n\n";
+}
 
 bool isZeroFloat(float v, float eps = 1e-3){
     if (std::fabs(v) < eps){
@@ -96,12 +104,13 @@ Eigen::Quaternion<float> quatFromDirAndYaw(const Eigen::Vector3f v, float yaw, f
     if(v[2] < 0){
         A = -A;
     }
-    A = cutAbsFloat(A, bowLimit)    ;
+    A = cutAbsFloat(A, bowLimit);
     float sinHalfA = sin(A / 2.f);
 
     Eigen::Quaternion<float> qBow = Eigen::Quaternion<float>(cos(A/2.f), sinHalfA*pin[0], sinHalfA*pin[1], sinHalfA*pin[2]);
 
-    return qBow*qYaw;
+
+    return qBow * qYaw;
 }
 
 float yawOnAim(const Eigen::Vector3f& drH) {
@@ -113,30 +122,6 @@ float yawOnAim(const Eigen::Vector3f& drH) {
         A = -A;
     }
     return A;
-}
-
-Eigen::Vector3f toYawPitchRoll(const Eigen::Quaternionf& q)
-{
-    Eigen::Vector3f yawPitchRoll;
-
-    float x = q.y();
-    float y = q.z();
-    float z = q.x();
-    float w = q.w();
-
-    yawPitchRoll[2] = atan2(2.0f * (y * z + w * x), w * w - x * x - y * y + z * z);
-    yawPitchRoll[1] = asin(-2.0f * (x * z - w * y));
-    yawPitchRoll[0] = atan2(2.0f * (x * y + w * z), w * w + x * x - y * y - z * z);
-
-    return yawPitchRoll;
-}
-
-float slowYaw(float yaw0, Eigen::Quaternionf q, float yawRate, float dt) {
-    float yaw = (toYawPitchRoll(q))[0];
-    if (isZeroFloat(yaw0 - yaw)){
-        return yaw;
-    }
-    return yaw0 + yawRate * dt;
 }
 
 class IntegratorFloat{
@@ -280,3 +265,43 @@ private:
     Eigen::Vector3f _v;
     float _lim;
 };
+
+float modFloat(float x, float y)
+{
+    if (0. == y)
+        return x;
+
+    double m= x - y * floor(x/y);
+
+    // handle boundary cases resulted from floating-point cut off:
+
+    if (y > 0)              // modulo range: [0..y)
+    {
+        if (m>=y)           // Mod(-1e-16             , 360.    ): m= 360.
+            return 0;
+
+        if (m<0 )
+        {
+            if (y+m == y)
+                return 0  ; // just in case...
+            else
+                return y+m; // Mod(106.81415022205296 , _TWO_PI ): m= -1.421e-14
+        }
+    }
+    else                    // modulo range: (y..0]
+    {
+        if (m<=y)           // Mod(1e-16              , -360.   ): m= -360.
+            return 0;
+
+        if (m>0 )
+        {
+            if (y+m == y)
+                return 0  ; // just in case...
+            else
+                return y+m; // Mod(-106.81415022205296, -_TWO_PI): m= 1.421e-14
+        }
+    }
+
+    return m;
+}
+

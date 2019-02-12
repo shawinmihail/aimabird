@@ -71,7 +71,7 @@ class AttitudeController:
         self.time = rospy.Time.now()
 
         yaw_rate = 0.0  # rad / s
-        self.send_cmd([1, 0., 0., yaw_rate])  # test yaw rate
+        self.send_cmd([0.5, 0., 0., yaw_rate])  # test yaw rate
         return
 
         if self.r is None:  # wait telemetry

@@ -47,9 +47,9 @@ public:
         std::stringstream ss;
 
         ss << timeMs << ",";
-//         ss << quaternionToStr(qPx);
-//         ss << vector3fToStr(rPx);
-//         ss << vector3fToStr(vPx);
+        ss << quaternionToStr(qPx);
+        ss << vector3fToStr(rPx);
+        ss << vector3fToStr(vPx);
         ss << vector3fToStr(aPx);
 //         ss << vector3fToStr(oPx);
 
@@ -63,8 +63,8 @@ public:
 //         ss << vector3fToStr(oGz);
 
         ss << quaternionToStr(q0);
-//         ss << vector3fToStr(r0);
-//         ss << vector3fToStr(v0);
+        ss << vector3fToStr(r0);
+        ss << vector3fToStr(v0);
 //         ss << vector3fToStr(a0);
 //         ss << vector3fToStr(o0);
 
@@ -82,9 +82,9 @@ public:
 
         ss << nameOf(timeMs) << ",";
 
-//         ss << quaternionNameToStr(nameOf(qPx));
-//         ss << vector3fNameToStr(nameOf(rPx));
-//         ss << vector3fNameToStr(nameOf(vPx));
+        ss << quaternionNameToStr(nameOf(qPx));
+        ss << vector3fNameToStr(nameOf(rPx));
+        ss << vector3fNameToStr(nameOf(vPx));
         ss << vector3fNameToStr(nameOf(aPx));
 //         ss << vector3fNameToStr(nameOf(oPx));
 
@@ -98,8 +98,8 @@ public:
 //         ss << vector3fNameToStr(nameOf(oGz));
 
         ss << quaternionNameToStr(nameOf(q0));
-//         ss << vector3fNameToStr(nameOf(r0));
-//         ss << vector3fNameToStr(nameOf(v0));
+        ss << vector3fNameToStr(nameOf(r0));
+        ss << vector3fNameToStr(nameOf(v0));
 //         ss << vector3fNameToStr(nameOf(a0));
 //         ss << vector3fNameToStr(nameOf(o0));
 

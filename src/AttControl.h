@@ -80,9 +80,11 @@ private:
     bool goOnRoute(std::vector<Eigen::Vector3f> route); //TODO not implemented yet
     bool goRelativePosition(Eigen::Vector3f r0);
     bool goWithVelocity(float h, Eigen::Vector3f v0, YawStrategy strategy, float yawStrategyParam);
+    bool goWithVelocity2D(float h, Eigen::Vector3f v0, float yawRate);
     bool goWithAcc(Eigen::Vector3f a0);
     bool accomulateVelocityWithImu(Eigen::Vector3f v0);
     bool accomulateVelocityWithImu(float vz);
+    Eigen::Vector3f getRegVector(Eigen::Vector3f dr, Vector3f dv, Eigen::Vector3f v, float dt);
 
     void pubCtrl(float thr, const Eigen::Quaternion<float>& quat);
 
@@ -92,6 +94,9 @@ private:
     void stateCb(const mavros_msgs::State& msg);
     void odometryCb(const nav_msgs::Odometry& msg);
     void photonCmdCb(const std_msgs::Float32MultiArray& msg);
+
+public:
+    void test();
 
 private:
     std::string imuTopicName;
@@ -143,10 +148,10 @@ private:
     Eigen::Vector3f vOd;
     Eigen::Vector3f oOd;
 
-    Eigen::Quaternion<float> q0;
-    float yaw0;
-    Eigen::Vector3f r0;
-    float yawRate0;
+    Eigen::Vector3f rInput;
+    float yawRateInput;
+    float yawPointerForRotate;
+    bool yawRateCtrlMode;
     bool aimAccepted;
 
     Status status;

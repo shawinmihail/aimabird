@@ -1,5 +1,20 @@
 #include "AttControl.h"
 
+void AttControl::test()
+{
+    Eigen::Quaternion<float> q(1.f, 2.f, 3.f, 4.f);
+    q.normalize();
+
+    auto e = q.toRotationMatrix().eulerAngles(2, 1, 0);;
+
+    std::cout << "E\n" << e << std::endl;
+    printQuat(q);
+
+
+
+}
+
+
 AttControl::AttControl():
  imuTopicName("/mavros/imu/data")
 ,posTopicName("mavros/local_position/pose")
@@ -29,8 +44,9 @@ AttControl::AttControl():
 ,dTimeMs(0)
 ,waitCounter(0)
 
-,yaw0(0.f)
-,yawRate0(0.f)
+,yawRateInput(0.f)
+,yawPointerForRotate(0.f)
+,yawRateCtrlMode(false)
 {}
 
 
@@ -104,7 +120,7 @@ void AttControl::prepareToFly()
                     break;
 
                 case Status::armed:
-                    done = goToLocalPoint(Eigen::Vector3f (0.f, 0.f, 3.0f), YawStrategy::constant, 0.f);
+                    done = goToLocalPoint(Eigen::Vector3f (-5.f, 5.f, 5.0f), YawStrategy::constant, PI/2.f);
                     if (done) {
                         logger.addEvent("AttCtrl: tookoff", timeMs);
                         status = Status::tookoff;
@@ -113,10 +129,10 @@ void AttControl::prepareToFly()
 
                 case Status::tookoff:
                     if (aimAccepted){
-                        done = goWithVelocity(3.f, r0, YawStrategy::rotation, yawRate0);
+                        done = goWithVelocity2D(2.f, rInput, -0.0);
                     }
                     else{
-                        goToLocalPoint(Eigen::Vector3f (0.f, 0.f, 3.0f), YawStrategy::constant, 0.f);
+                        goToLocalPoint(Eigen::Vector3f (5.f, 10.f, 10.0f), YawStrategy::constant, -PI/2.f);
                     }
 
                     break;
@@ -139,7 +155,6 @@ void AttControl::prepareToFly()
         if (status >= Status::sensorsReady && status < Status::armed) {
             sendIdling(); // send min thrust before flight to able offboard / arm
         }
-
         ros::spinOnce();
         rate.sleep();
     }
@@ -181,7 +196,11 @@ bool AttControl::init()
 
 bool AttControl::checkFeedback()
 {
-    if (imuReady && odometryReady) {
+//     if (imuReady && odometryReady && velReady && posReady) {
+//         status = Status::sensorsReady;
+//         return true;
+//     }
+    if (imuReady && velReady && posReady) {
         status = Status::sensorsReady;
         return true;
     }
@@ -219,16 +238,8 @@ bool AttControl::takeoff(){ // testing
 //     pubCtrl(thrust, qPx);
 }
 
-bool AttControl::goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy, float yawStrategyParam)
-{
-    float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
-
-    Eigen::Vector3f r = rEs;
-    Eigen::Vector3f v = vEs;
-    Eigen::Vector3f dr = r0 - r;
-    Eigen::Vector3f dv = -v;
+Eigen::Vector3f AttControl::getRegVector(Eigen::Vector3f dr, Vector3f dv, Eigen::Vector3f v, float dt){
     dr = cutAbsVector3f(dr, Eigen::Vector3f(GO_LOCAL_INPUT_LIM_H, GO_LOCAL_INPUT_LIM_H, GO_LOCAL_INPUT_LIM_V));
-
     /** **/
     Eigen::Vector3f P = Eigen::Vector3f(GO_LOCAL_PID_P_H * dr[0], GO_LOCAL_PID_P_H * dr[1], GO_LOCAL_PID_P_V * dr[2]);
     Eigen::Vector3f I;
@@ -240,58 +251,78 @@ bool AttControl::goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy, float 
     }
     I = cutAbsVector3f(I, GO_LOCAL_PID_I_LIM_V);
     Eigen::Vector3f D = Eigen::Vector3f(GO_LOCAL_PID_D_H * dv[0], GO_LOCAL_PID_D_H * dv[1], GO_LOCAL_PID_D_V * dv[2]);
-    /** **/
     Eigen::Vector3f regOutVec = P + I + D + Eigen::Vector3f(0., 0., FREE_FALL_ACC_ABS);
+    return regOutVec;
+}
+
+bool AttControl::goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy, float yawStrategyParam)
+{
+    yawRateCtrlMode = false;
+
+    float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
+    Eigen::Quaternion<float> q = qPx;
+    Eigen::Vector3f r = rPx;
+    Eigen::Vector3f v = quatRotate(q.inverse(), vPx); // TODO what the hell it works that way&&&&
+    //Eigen::Vector3f v = vPx;
+
+
+    Eigen::Vector3f dr = r0 - r;
+    dr = cutAbsVector3f(dr, Eigen::Vector3f(GO_LOCAL_INPUT_LIM_H, GO_LOCAL_INPUT_LIM_H, GO_LOCAL_INPUT_LIM_V));
+    Eigen::Vector3f dv = -v;
+    Eigen::Vector3f reg = getRegVector(dr, dv, v, dt);
 
     /* yaw */
-    Eigen::Vector3f drH = Eigen::Vector3f(dr[0], dr[1], 0.f);
-
-    float yawDes = 0.f;
-    float yawCurrent = (toYawPitchRoll(qOd))[0];
-    switch (strategy) {
-        case YawStrategy::constant:
-            yawDes = yawStrategyParam;
-            break;
-
-        case YawStrategy::onAim:
-            if (!isZeroVector3f(drH, POSE_EPS)){
-                yawDes = yawOnAim(drH);
-            }
-            else{
-                yawDes = yaw0;
-            }
-            break;
-
-        case YawStrategy::aboutAim:
-            if (!isZeroVector3f(drH, POSE_EPS)){
-                yawDes = yawOnAim(drH);
-                yawDes += yawStrategyParam * cos(YAW_RATE_DES * timeMs / 1e3f);
-            }
-            else{
-                yawDes = yaw0;
-            }
-            break;
-
-        case YawStrategy::rotation:
-            yaw0 += yawStrategyParam * dt;
-            yawDes = yaw0;
-            break;
-    }
-
+//     Eigen::Vector3f drH = Eigen::Vector3f(dr[0], dr[1], 0.f);
+//     float yawDes = 0.f;
+//     float yawCurrent = (toYawPitchRoll(q))[0];
+//     switch (strategy) {
+//         case YawStrategy::constant:
+//             yawDes = yawStrategyParam;
+//             break;
+//
+//         case YawStrategy::onAim:
+//             if (!isZeroVector3f(drH, POSE_EPS)){
+//                 yawDes = yawOnAim(drH);
+//             }
+//             else{
+//                 yawDes = yaw0;
+//             }
+//             break;
+//
+//         case YawStrategy::aboutAim:
+//             if (!isZeroVector3f(drH, POSE_EPS)){
+//                 yawDes = yawOnAim(drH);
+//                 yawDes += yawStrategyParam * cos(YAW_RATE_DES * timeMs / 1e3f);
+//             }
+//             else{
+//                 yawDes = yaw0;
+//             }
+//             break;
+//
+//         case YawStrategy::rotation:
+//             yaw0 += yawStrategyParam * dt;
+//             yawDes = yaw0;
+//             break;
+//     }
+/*
     float dYaw = yawDes - yaw0;
     if (!isZeroFloat(dYaw)){
         yaw0 += dYaw * YAW_RATE_DES * dt / fabs(dYaw);
-    }
-
-//     std::cout << "y0: " << yaw0 << std::endl << std::endl;
-//     std::cout << "ys: " << yawDes << std::endl << std::endl;
-//     std::cout << "yd: " << dYaw << std::endl << std::endl;
+    }*/
 
 
-    q0 = quatFromDirAndYaw(regOutVec, yaw0, 5.f*PI/ 180.f);
-    float thrust = regOutVec.norm() / TW / FREE_FALL_ACC_ABS;
+    Eigen::Quaternion<float> qCtrlOut = quatFromDirAndYaw(reg, yawStrategyParam, 180.f*PI/ 180.f);
+    float thrust = reg.norm() / TW / FREE_FALL_ACC_ABS;
     thrust = cutTwosidesFloat(thrust, MIN_THRUST, MAX_THRUST);
-    pubCtrl(thrust, q0);
+    pubCtrl(thrust, qCtrlOut);
+
+//     std::cout << "dr :\n" << dr << std::endl << std::endl;
+//     std::cout << "dv :\n" << dv << std::endl << std::endl;
+//     std::cout << "reg:\n" << reg / reg.norm() << std::endl << std::endl;
+//     std::cout << "z  :\n" << z << std::endl << std::endl;
+//     printQuat(qCtrlOut);
+//     printQuat(qPx);
+
 
     if (isZeroVector3f(dr, POSE_EPS)){
         return true;
@@ -299,81 +330,103 @@ bool AttControl::goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy, float 
     return false;
 }
 
-bool AttControl::goWithVelocity(float h, Eigen::Vector3f v0, YawStrategy strategy, float yawStrategyParam)
-{
+bool AttControl::goWithVelocity2D(float h, Eigen::Vector3f v0, float yawRate){
+
     float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
+    Eigen::Quaternion<float> q = qPx;
+    Eigen::Vector3f r = rPx;
+    Eigen::Vector3f v = quatRotate(qPx.inverse(), vPx);
 
-    v0 = quatRotate(qOd.inverse(), v0);
-    Eigen::Vector3f r = rEs;
+    Eigen::Vector3f e = q.toRotationMatrix().eulerAngles(2, 1, 0);
+    float yaw = e[0];
+
+    Eigen::Quaternion<float> qYaw(cos(yaw/2.f), 0.f, 0.f, sin(yaw/2.f));
+    Eigen::Vector3f v0I = quatRotate(qYaw, v0);
     Eigen::Vector3f dr(0.f, 0.f, h-r[2]);
-    Eigen::Vector3f v = vEs;
-    Eigen::Vector3f dv = v0 - v;
+    Eigen::Vector3f dv = v0I - v;
 
-    dr = cutAbsVector3f(dr, Eigen::Vector3f(GO_LOCAL_INPUT_LIM_H, GO_LOCAL_INPUT_LIM_H, GO_LOCAL_INPUT_LIM_V));
-    /** **/
-    Eigen::Vector3f P = Eigen::Vector3f(GO_LOCAL_PID_P_H * dr[0], GO_LOCAL_PID_P_H * dr[1], GO_LOCAL_PID_P_V * dr[2]);
-    Eigen::Vector3f I;
-    if(dr[2] * v[2] < GO_LOCAL_ANTIWINDUP_PARAM_V) {
-        I =  goLocalIr.get(Eigen::Vector3f(0.f, 0.f, GO_LOCAL_PID_I_V * dr[2]), dt);
-    }
-    else{
-        I = goLocalIr.get();
-    }
-    I = cutAbsVector3f(I, GO_LOCAL_PID_I_LIM_V);
-    Eigen::Vector3f D = Eigen::Vector3f(GO_LOCAL_PID_D_H * dv[0], GO_LOCAL_PID_D_H * dv[1], GO_LOCAL_PID_D_V * dv[2]);
-    /** **/
-    Eigen::Vector3f regOutVec = P + I + D + Eigen::Vector3f(0., 0., FREE_FALL_ACC_ABS);
+    Eigen::Vector3f reg = getRegVector(dr, dv, v, dt);
 
-    /* yaw */
-    Eigen::Vector3f vH = Eigen::Vector3f(v0[0], v0[1], 0.f);
-
-    float yawDes = 0.f;
-    switch (strategy) {
-        case YawStrategy::constant:
-            yawDes = yawStrategyParam;
-            break;
-
-        case YawStrategy::onAim:
-            if (!isZeroVector3f(vH, EST_VEL_EPS)){
-                yawDes = yawOnAim(vH);
-            }
-            else{
-                yawDes = yaw0;
-            }
-            break;
-
-        case YawStrategy::aboutAim:
-            if (!isZeroVector3f(vH, POSE_EPS)){
-                yawDes = yawOnAim(vH);
-                yawDes += yawStrategyParam * cos(YAW_RATE_DES * timeMs / 1e3f);
-            }
-            else{
-                yawDes = yaw0;
-            }
-            break;
-
-        case YawStrategy::rotation:
-            yaw0 += yawStrategyParam * dt;
-            yawDes = yaw0;
-            break;
+    if (!yawRateCtrlMode){
+        yawRateCtrlMode = true;
+        yawPointerForRotate = yaw;
+        std::cout << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << yawPointerForRotate << std::endl << std::endl;
+        std::cout << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << e << std::endl << std::endl;
     }
 
-    float yawCurrent = (toYawPitchRoll(qOd))[0];
-    float dYaw = yawDes - yaw0;
-    dYaw = cutAbsFloat(dYaw, PI);
-    if (!isZeroFloat(dYaw)){
-        yaw0 += dYaw * YAW_RATE_DES * dt;
-    }
+    yawPointerForRotate += yawRate * dt;
+    //yawPointerForRotate = modFloat(yawPointerForRotate + PI, 2 * PI) - PI;
 
-
-    q0 = quatFromDirAndYaw(regOutVec, yaw0, 5.f*PI/ 180.f);
-    float thrust = regOutVec.norm() / TW / FREE_FALL_ACC_ABS;
+    Eigen::Quaternion<float> qCtrlOut = quatFromDirAndYaw(reg, yawPointerForRotate, 10.f*PI/ 180.f);
+    float thrust = reg.norm() / TW / FREE_FALL_ACC_ABS;
     thrust = cutTwosidesFloat(thrust, MIN_THRUST, MAX_THRUST);
-    pubCtrl(thrust, q0);
+    pubCtrl(thrust, qCtrlOut);
 
-    if (isZeroVector3f(dr, POSE_EPS)){
-        return true;
-    }
+//     std::cout << "reg:\n" << reg << std::endl << std::endl;
+//     std::cout << "dv:  \n" << dv << std::endl << std::endl;
+//     std::cout << "dr:  \n" << dv << std::endl << std::endl;
+//     std::cout << "y3  :\n" << yaw << std::endl << std::endl;
+//     std::cout << "-----  :\n" << std::endl << std::endl;
+
+    return true;
+}
+
+bool AttControl::goWithVelocity(float h, Eigen::Vector3f v0, YawStrategy strategy, float yawStrategyParam) // TODO remake
+{
+//     float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
+//     Eigen::Vector3f r = rEs;
+//     Eigen::Vector3f dr(0.f, 0.f, h-r[2]);
+//     Eigen::Vector3f v = vEs;
+//     Eigen::Vector3f dv = v0 - v;
+//
+//     /* yaw */
+//     Eigen::Vector3f vH = Eigen::Vector3f(v0[0], v0[1], 0.f);
+//     float yawDes = 0.f;
+//     switch (strategy) {
+//         case YawStrategy::constant:
+//             yawDes = yawStrategyParam;
+//             break;
+//
+//         case YawStrategy::onAim:
+//             if (!isZeroVector3f(vH, EST_VEL_EPS)){
+//                 yawDes = yawOnAim(vH);
+//             }
+//             else{
+//                 yawDes = yaw0;
+//             }
+//             break;
+//
+//         case YawStrategy::aboutAim:
+//             if (!isZeroVector3f(vH, POSE_EPS)){
+//                 yawDes = yawOnAim(vH);
+//                 yawDes += yawStrategyParam * cos(YAW_RATE_DES * timeMs / 1e3f);
+//             }
+//             else{
+//                 yawDes = yaw0;
+//             }
+//             break;
+//
+//         case YawStrategy::rotation:
+//             yaw0 += yawStrategyParam * dt;
+//             yawDes = yaw0;
+//             break;
+//     }
+//
+//     float yawCurrent = (toYawPitchRoll(qPx))[0];
+//     float dYaw = yawDes - yaw0;
+//     dYaw = cutAbsFloat(dYaw, PI);
+//     if (!isZeroFloat(dYaw)){
+//         yaw0 += dYaw * YAW_RATE_DES * dt;
+//     }
+//     Eigen::Vector3f reg = getRegVector(dr, dv, v, dt);
+//     q0 = quatFromDirAndYaw(reg, yaw0, 5.f*PI/ 180.f);
+//     float thrust = reg.norm() / TW / FREE_FALL_ACC_ABS;
+//     thrust = cutTwosidesFloat(thrust, MIN_THRUST, MAX_THRUST);
+//     pubCtrl(thrust, q0);
+//
+//     if (isZeroVector3f(dr, POSE_EPS)){
+//         return true;
+//     }
     return false;
 }
 
@@ -387,58 +440,58 @@ bool AttControl::goRelativePosition(Eigen::Vector3f r0)
 
 bool AttControl::goWithAcc(Eigen::Vector3f a0) // TODO remake
 {
-    Eigen::Vector3f a = aPxClearI;
-
-    Eigen::Vector3f da =  a0 - a;
-    float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
-    //Eigen::Vector3f integralPart = 1.f * cutAbsVector3f(goAccIr.get(da, dt), 1.f);
-    Eigen::Vector3f integralPart = goAccIr.get(da, dt);
-    Eigen::Vector3f regOutVec = 1.f * da + integralPart + Eigen::Vector3f(0., 0., FREE_FALL_ACC_ABS);
-
-    Eigen::Quaternion<float> q0 = Eigen::Quaternion<float>(); // TODO assert q without flips
-    q0.setFromTwoVectors(UNIT_Z, regOutVec); // TODO calc yaw and pitch/roll quat
-    q0.normalize();
-
-    float thrust = regOutVec.norm() / TW / FREE_FALL_ACC_ABS; //TODO check use norm for thrust
-    thrust = cutTwosidesFloat(thrust, MIN_THRUST, MAX_THRUST);
-
-    pubCtrl(thrust, q0);
+//     Eigen::Vector3f a = aPxClearI;
+//
+//     Eigen::Vector3f da =  a0 - a;
+//     float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
+//     //Eigen::Vector3f integralPart = 1.f * cutAbsVector3f(goAccIr.get(da, dt), 1.f);
+//     Eigen::Vector3f integralPart = goAccIr.get(da, dt);
+//     Eigen::Vector3f regOutVec = 1.f * da + integralPart + Eigen::Vector3f(0., 0., FREE_FALL_ACC_ABS);
+//
+//     Eigen::Quaternion<float> q0 = Eigen::Quaternion<float>(); // TODO assert q without flips
+//     q0.setFromTwoVectors(UNIT_Z, regOutVec); // TODO calc yaw and pitch/roll quat
+//     q0.normalize();
+//
+//     float thrust = regOutVec.norm() / TW / FREE_FALL_ACC_ABS; //TODO check use norm for thrust
+//     thrust = cutTwosidesFloat(thrust, MIN_THRUST, MAX_THRUST);
+//
+//     pubCtrl(thrust, q0);
     return true;
 }
 
 bool AttControl::accomulateVelocityWithImu(Eigen::Vector3f v0) // TODO how remove small oscilations?
 {   /* d time for calc */
-    float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
-
-    /* velocity estimation */
-    Eigen::Vector3f v = accamulateVelIrEstimator.get(aPxClearI, dt);
-    Eigen::Vector3f dv = v0 - v;
-
-    /* velocity regulator */
-    Eigen::Vector3f integralPart = ACCUM_VEL_PID_I * accamulateVelIr.get(dv, dt);
-    integralPart = cutAbsVector3f(Eigen::Vector3f(0.f, 0.f, integralPart[2]), ACCUM_VEL_PID_I_ERROR_LIM); // integral ONLY for altitude
-
-    Eigen::Vector3f regOutVec = cutAbsVector3f(ACCUM_VEL_PID_P * dv, ACCUM_VEL_PID_P_ERROR_LIM)
-    + integralPart
-    + Eigen::Vector3f(0., 0., 1.f / TW);
-
-    float yaw = 0*PI/2.f;
-    q0 = quatFromDirAndYaw(regOutVec, yaw, 30.f*PI/ 180.f);
-
-    /* reg + hower thrust */
-    float thrust = regOutVec.dot(UNIT_Z);
-
-    /* pub */
-    thrust = cutTwosidesFloat(thrust, MIN_THRUST, MAX_THRUST);
-    logData.debug1 = v[0];
-    logData.debug2 = v[1];
-    logData.debug3 = v[2];
-    logData.debug4 = thrust;
-    pubCtrl(thrust, q0);
-
-    if (isZeroVector3f(dv, EST_VEL_EPS)){
-        return true;
-    }
+//     float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
+//
+//     /* velocity estimation */
+//     Eigen::Vector3f v = accamulateVelIrEstimator.get(aPxClearI, dt);
+//     Eigen::Vector3f dv = v0 - v;
+//
+//     /* velocity regulator */
+//     Eigen::Vector3f integralPart = ACCUM_VEL_PID_I * accamulateVelIr.get(dv, dt);
+//     integralPart = cutAbsVector3f(Eigen::Vector3f(0.f, 0.f, integralPart[2]), ACCUM_VEL_PID_I_ERROR_LIM); // integral ONLY for altitude
+//
+//     Eigen::Vector3f regOutVec = cutAbsVector3f(ACCUM_VEL_PID_P * dv, ACCUM_VEL_PID_P_ERROR_LIM)
+//     + integralPart
+//     + Eigen::Vector3f(0., 0., 1.f / TW);
+//
+//     float yaw = 0*PI/2.f;
+//     q0 = quatFromDirAndYaw(regOutVec, yaw, 30.f*PI/ 180.f);
+//
+//     /* reg + hower thrust */
+//     float thrust = regOutVec.dot(UNIT_Z);
+//
+//     /* pub */
+//     thrust = cutTwosidesFloat(thrust, MIN_THRUST, MAX_THRUST);
+//     logData.debug1 = v[0];
+//     logData.debug2 = v[1];
+//     logData.debug3 = v[2];
+//     logData.debug4 = thrust;
+//     pubCtrl(thrust, q0);
+//
+//     if (isZeroVector3f(dv, EST_VEL_EPS)){
+//         return true;
+//     }
     return false;
 }
 
@@ -627,10 +680,10 @@ void AttControl::photonCmdCb(const std_msgs::Float32MultiArray& msg)
 //     }
 
     Eigen::Vector3f r = Eigen::Vector3f(msg.data[0], msg.data[1], msg.data[2]);
-    r0 = r;
-    yawRate0 = msg.data[3];
+    rInput = r;
+    yawRateInput = msg.data[3];
     aimAccepted = true;
-    logger.addEvent("AttCtrl: new aim accepted", timeMs);
+    //logger.addEvent("AttCtrl: new aim accepted", timeMs);
 
 }
 
@@ -643,13 +696,16 @@ void AttControl::writeLogData()
 
     logData.timeMs = ms.count();
 //     logData.timeMs = uint64_t(ros::Time::now().toSec() * 1e3);
-    logData.aPx = aPxClearI;
+    logData.vPx = quatRotate(qPx.inverse(), vPx);
+    logData.rPx = rPx;
+    logData.qPx = qPx;
     logData.qOd = qOd;
     logData.rOd = rOd;
     logData.vOd = vOd;
     logData.rEs = rEs;
     logData.vEs = vEs;
-    logData.q0 = q0;
+
+    logData.r0 = qPx.toRotationMatrix().eulerAngles(2, 1, 0);
 
     logger.addData(logData);
 }
