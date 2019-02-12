@@ -2,13 +2,13 @@
 
 void AttControl::test()
 {
-    Eigen::Quaternion<float> q(1.f, 2.f, 3.f, 4.f);
-    q.normalize();
+    Eigen::Quaternion<float> q(0.707072, 0.000500823, -0.000147876, -0.707141);
+    //q.normalize();
 
-    auto e = q.toRotationMatrix().eulerAngles(2, 1, 0);;
+    auto e = quat2Eul(q);
 
     std::cout << "E\n" << e << std::endl;
-    printQuat(q);
+//     printQuat(q);
 
 
 
@@ -120,7 +120,7 @@ void AttControl::prepareToFly()
                     break;
 
                 case Status::armed:
-                    done = goToLocalPoint(Eigen::Vector3f (-5.f, 5.f, 5.0f), YawStrategy::constant, PI/2.f);
+                    done = goToLocalPoint(Eigen::Vector3f (0.f, 0.f, 5.0f), YawStrategy::constant, PI/2.f);
                     if (done) {
                         logger.addEvent("AttCtrl: tookoff", timeMs);
                         status = Status::tookoff;
@@ -129,10 +129,10 @@ void AttControl::prepareToFly()
 
                 case Status::tookoff:
                     if (aimAccepted){
-                        done = goWithVelocity2D(2.f, rInput, -0.0);
+                        done = goWithVelocity2D(5.f, Eigen::Vector3f (0.5f, 0.f, .0f), 0.3);
                     }
                     else{
-                        goToLocalPoint(Eigen::Vector3f (5.f, 10.f, 10.0f), YawStrategy::constant, -PI/2.f);
+                        goToLocalPoint(Eigen::Vector3f (0.f, 0.f, 5.0f), YawStrategy::constant, -PI/2.f);
                     }
 
                     break;
@@ -263,8 +263,6 @@ bool AttControl::goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy, float 
     Eigen::Quaternion<float> q = qPx;
     Eigen::Vector3f r = rPx;
     Eigen::Vector3f v = quatRotate(q.inverse(), vPx); // TODO what the hell it works that way&&&&
-    //Eigen::Vector3f v = vPx;
-
 
     Eigen::Vector3f dr = r0 - r;
     dr = cutAbsVector3f(dr, Eigen::Vector3f(GO_LOCAL_INPUT_LIM_H, GO_LOCAL_INPUT_LIM_H, GO_LOCAL_INPUT_LIM_V));
@@ -336,12 +334,11 @@ bool AttControl::goWithVelocity2D(float h, Eigen::Vector3f v0, float yawRate){
     Eigen::Quaternion<float> q = qPx;
     Eigen::Vector3f r = rPx;
     Eigen::Vector3f v = quatRotate(qPx.inverse(), vPx);
-
-    Eigen::Vector3f e = q.toRotationMatrix().eulerAngles(2, 1, 0);
-    float yaw = e[0];
+    Eigen::Vector3f e = quat2Eul(q);
+    float yaw = e[2];
 
     Eigen::Quaternion<float> qYaw(cos(yaw/2.f), 0.f, 0.f, sin(yaw/2.f));
-    Eigen::Vector3f v0I = quatRotate(qYaw, v0);
+    Eigen::Vector3f v0I = quatRotate(qYaw.inverse(), v0);
     Eigen::Vector3f dr(0.f, 0.f, h-r[2]);
     Eigen::Vector3f dv = v0I - v;
 
@@ -352,6 +349,7 @@ bool AttControl::goWithVelocity2D(float h, Eigen::Vector3f v0, float yawRate){
         yawPointerForRotate = yaw;
         std::cout << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << yawPointerForRotate << std::endl << std::endl;
         std::cout << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << e << std::endl << std::endl;
+        printQuat(qPx);
     }
 
     yawPointerForRotate += yawRate * dt;

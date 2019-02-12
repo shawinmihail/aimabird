@@ -148,6 +148,27 @@ private:
     float _res;
 };
 
+Eigen::Vector3f quat2Eul(const Eigen::Quaternion<float>& q){
+    float sinr = 2.0f * (q.w() * q.x() + q.y() * q.z());
+    float cosr = 1.0f - 2.0f * (q.x() * q.x() + q.y() * q.y());
+    float roll = atan2(sinr, cosr);
+
+    float sinp = 2.0f * (q.w() * q.y() - q.z() * q.x());
+    float pitch = 0.f;
+    if (abs(sinp) >= 1) {
+        pitch = sinp / fabs (sinp) * PI / 2.f;
+    }
+    else {
+        pitch = asin(sinp);
+    }
+
+    float siny = 2.0f * (q.w() * q.z() + q.x() * q.y());
+    float cosy = 1.0f - 2.0f * (q.y() * q.y() + q.z() * q.z());
+    float yaw = atan2(siny, cosy);
+    return Eigen::Vector3f(roll, pitch, yaw);
+}
+
+
 
 class DifferenciatorFloat{
 
