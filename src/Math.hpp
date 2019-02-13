@@ -3,14 +3,23 @@
 #include <math.h>
 #include <limits>
 #include <cmath>
+#include <math.h>
 #include "Params.h"
 #include <iostream>
 #include <stdio.h>
 #include <iostream>
 #include <string>
 
-void printQuat(const Eigen::Quaternion<float>& q, std::string name="q:\n"){
-    std::cout << name << q.w() << "\n" << q.x() << "\n" << q.y() << "\n" << q.z() << "\n\n";
+bool isNanVect(const Eigen::Vector3f& v){
+    return std::isnan(v[0]) || std::isnan(v[1]) || std::isnan(v[2]);
+}
+
+void printVect(const Eigen::Vector3f& v, std::string name="v"){
+    std::cout << name << ": " << v[0] << " " << v[1]<< " " << v[2] << "\n\n";
+}
+
+void printQuat(const Eigen::Quaternion<float>& q, std::string name="q"){
+    std::cout << name << ": "<< q.w() << " " << q.x()<< " " << q.y()<< " " << q.z() << "\n\n";
 }
 
 bool isZeroFloat(float v, float eps = 1e-3){

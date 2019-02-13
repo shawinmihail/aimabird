@@ -12,7 +12,6 @@ const Eigen::Vector3f UNIT_Z(0.f, 0., 1.f);                                   //
 const Eigen::Vector3f UNIT_X(1.f, 0., 0.f);                                   // z unit vector
 
 const int CTRL_RATE = 100;                                                   //control rate in HZ
-const float MIN_TICK_FOR_CALCS = 1.f/CTRL_RATE;                                //min dt for integrator, differentiator and other math
 
 /* control params */
 const float MIN_THRUST = 0.2f;                                               // minimum in flight thrust (% / 100); value used for null thrsut at the ground

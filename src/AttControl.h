@@ -66,13 +66,14 @@ private:
     void initServs();
     void writeLogData();
     void clockTick();
+    float getLastTickDuration();
     void wait(int s);
     bool waiting();
     bool sendIdling();
     bool sendPhotonTm();
 
     bool checkFeedback();
-    bool estimateState(bool measured);
+    bool estimateState();
     bool setOffboard();
     bool arm();
     bool takeoff();
