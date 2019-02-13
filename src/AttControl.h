@@ -86,8 +86,10 @@ private:
     bool accomulateVelocityWithImu(Eigen::Vector3f v0);
     bool accomulateVelocityWithImu(float vz);
     Eigen::Vector3f getRegVector(Eigen::Vector3f dr, Vector3f dv, Eigen::Vector3f v, float dt);
+    Eigen::Vector3f getTwistVector(const Eigen::Quaternion<float>& q0, const Eigen::Vector3f& w0);
 
     void pubCtrl(float thr, const Eigen::Quaternion<float>& quat);
+    void pubCtrl(float thr, const Eigen::Vector3f& v);
 
     void imuCb(const sensor_msgs::Imu& msg);
     void posCb(const geometry_msgs::PoseStamped& msg);
@@ -109,9 +111,10 @@ private:
     std::string odometryTopicName;
     std::string setmodeServiceName;
     std::string armServiceName;
-    std::string cmdTopicName;
+    std::string cmdVelTopicName;
     std::string photonCmdTopicName;
     std::string photonTmTopicName;
+    std::string useQuatParamTopicName;
 
     ros::NodeHandle nodeHandle;
     ros::ServiceClient modeService;
@@ -124,6 +127,7 @@ private:
     ros::Subscriber odometrySub;
     ros::Subscriber photonCmdSub;
     ros::Publisher attPub;
+    ros::Publisher velPub;
     ros::Publisher thrPub;
     ros::Publisher photonTmPub;
     ros::Rate rate;

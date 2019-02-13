@@ -24,10 +24,11 @@ AttControl::AttControl():
 ,setmodeServiceName("/mavros/set_mode")
 ,setattTopicName("/mavros/setpoint_attitude/attitude")
 ,setthrTopicName("/mavros/setpoint_attitude/thrust")
-,cmdTopicName("/mavros/setpoint_attitude/thrust")
+,cmdVelTopicName("/mavros/setpoint_attitude/cmd_vel")
 ,odometryTopicName("/rtabmap/odom")
 ,photonCmdTopicName("/aimabird_control/photonCmd")
 ,photonTmTopicName("/aimabird_control/photonTm")
+,useQuatParamTopicName("/mavros/setpoint_attitude/use_quaternion")
 
 ,status(Status::begin)
 ,gIinited(false)
@@ -138,7 +139,7 @@ void AttControl::prepareToFly()
                         done = goWithVelocity2D(5.f, rInput, yawRateInput);
                     }
                     else{
-                        goToLocalPoint(Eigen::Vector3f (0.f, 0.f, 5.0f), YawStrategy::constant, -PI/2);
+                        goToLocalPoint(Eigen::Vector3f (5.f, 0.f, 5.0f), YawStrategy::constant, -PI/2.f);
                     }
 
                     break;
@@ -202,7 +203,9 @@ bool AttControl::init()
 
 bool AttControl::checkFeedback()
 {
-    if (imuReady && odometryReady && velReady && posReady) {
+    bool check = imuReady && velReady && posReady;
+    if (USE_ODOMETRY) {check = check  && odometryReady;}
+    if (check) {
         status = Status::sensorsReady;
         return true;
     }
@@ -261,26 +264,64 @@ Eigen::Vector3f AttControl::getRegVector(Eigen::Vector3f dr, Vector3f dv, Eigen:
     return regOutVec;
 }
 
+Vector3f AttControl::getTwistVector(const Eigen::Quaternion<float>& q0, const Eigen::Vector3f& w0)
+{
+    Eigen::Vector3f e0 = quat2Eul(q0);
+    Eigen::Vector3f e = quat2Eul(qPx);
+    Eigen::Vector3f de = e0 - e;
+    de = cutAbsVector3f(de, 0.10f);
+    Eigen::Vector3f dw = w0 - oPx;
+    Eigen::Vector3f w = 4.0f * de + 1.0 * dw;
+
+
+//     printVect(e0,"e0");
+//     printVect(e ,"e ");
+//     printVect(de,"de");
+//     printVect(dw,"dw");
+//     printVect(reg,"re");
+
+    return w;
+}
+
+
 bool AttControl::goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy, float yawStrategyParam)
 {
     yawRateCtrlMode = false;
 
     float dt = getLastTickDuration();
     Eigen::Quaternion<float> q = qPx;
-    //Eigen::Vector3f r = rPx;
-    Eigen::Vector3f r = rEs;
-    //Eigen::Vector3f v = quatRotate(q.inverse(), vPx); // TODO what the hell it works that way&&&&
-    Eigen::Vector3f v = vEs; // TODO what the hell it works that way&&&&
+
+
+    Eigen::Vector3f r;
+    Eigen::Vector3f v;
+    if (USE_ODOMETRY){
+        r = rEs;
+        v = vEs; // TODO what the hell it works that way&&&&
+    }
+    else{
+        r = rPx;
+        v = quatRotate(q.inverse(), vPx); // TODO what the hell it works that way&&&&
+    }
+
 
     Eigen::Vector3f dr = r0 - r;
     dr = cutAbsVector3f(dr, Eigen::Vector3f(GO_LOCAL_INPUT_LIM_H, GO_LOCAL_INPUT_LIM_H, GO_LOCAL_INPUT_LIM_V));
     Eigen::Vector3f dv = -v;
     Eigen::Vector3f reg = getRegVector(dr, dv, v, dt);
 
-    Eigen::Quaternion<float> qCtrlOut = quatFromDirAndYaw(reg, yawStrategyParam, 180.f*PI/ 180.f);
     float thrust = reg.norm() / TW / FREE_FALL_ACC_ABS;
     thrust = cutTwosidesFloat(thrust, MIN_THRUST, MAX_THRUST);
-    pubCtrl(thrust, qCtrlOut);
+
+    Eigen::Quaternion<float> qCtrlOut = quatFromDirAndYaw(reg, yawStrategyParam, 180.f*PI/ 180.f);
+    if (USE_QUATERNION){
+        pubCtrl(thrust, qCtrlOut);
+    }
+    else {
+        Eigen::Vector3f o0(0.f, 0.f, 0.f);
+        Eigen::Vector3f oCtrlOut = getTwistVector(qCtrlOut, o0);
+        pubCtrl(thrust, oCtrlOut);
+    }
+
 
 //     std::cout << "dr :\n" << dr << std::endl << std::endl;
 //     printQuat(qPx);
@@ -503,15 +544,28 @@ void AttControl::subscribe()
 
 void AttControl::initPubs()
 {
-    attPub = nodeHandle.advertise<geometry_msgs::PoseStamped>(setattTopicName, QUENUE_DEPTH);
-    thrPub = nodeHandle.advertise<mavros_msgs::Thrust>(setthrTopicName, QUENUE_DEPTH);
+    if (USE_QUATERNION){
+        nodeHandle.setParam(useQuatParamTopicName, "true");
+        usleep(100000);
+        attPub = nodeHandle.advertise<geometry_msgs::PoseStamped>(setattTopicName, QUENUE_DEPTH);
+    }
+    else{
+        nodeHandle.setParam(useQuatParamTopicName, "false");
+        usleep(100000);
+        velPub = nodeHandle.advertise<geometry_msgs::TwistStamped>(cmdVelTopicName, QUENUE_DEPTH);
+    }
     thrPub = nodeHandle.advertise<mavros_msgs::Thrust>(setthrTopicName, QUENUE_DEPTH);
     photonTmPub = nodeHandle.advertise<std_msgs::Float32MultiArray>(photonTmTopicName, QUENUE_DEPTH);
 }
 
 bool AttControl::sendIdling()
 {
-    pubCtrl(MIN_THRUST, qPx);
+    if (USE_QUATERNION){
+        pubCtrl(MIN_THRUST, qPx);
+    }
+    else{
+        pubCtrl(MIN_THRUST, Eigen::Vector3f(0.f, 0.f, 0.f));
+    }
     return true;
 }
 
@@ -547,10 +601,34 @@ void AttControl::pubCtrl(float thr, const Eigen::Quaternion<float>& quat)
     attPub.publish(quatMsg);
 }
 
+void AttControl::pubCtrl(float thr, const Eigen::Vector3f& v)
+{
+    ros::Time now = ros::Time::now();
+    geometry_msgs::TwistStamped twistMsg;
+    twistMsg.header.stamp = now;
+    twistMsg.header.frame_id = FRAME_ID;
+    twistMsg.twist.angular.x = v[0];
+    twistMsg.twist.angular.y = v[1];
+    twistMsg.twist.angular.z = v[2];
+    twistMsg.twist.linear.x = 0.;
+    twistMsg.twist.linear.y = 0.;
+    twistMsg.twist.linear.z = 0.;
+
+    mavros_msgs::Thrust thrMsg;
+    thrMsg.header.stamp =  now;
+    thrMsg.header.frame_id = FRAME_ID;
+    thrMsg.thrust = thr;
+
+    thrPub.publish(thrMsg);
+    velPub.publish(twistMsg);
+}
+
+
 void AttControl::imuCb(const sensor_msgs::Imu& msg)
 {
     aPx = Eigen::Vector3f(msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z);
     qPx = Eigen::Quaternion<float>(msg.orientation.w, msg.orientation.x, msg.orientation.y, msg.orientation.z);
+    oPx = Eigen::Vector3f(msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z);
 
     if (!gIinited){
         gIestimated =  Eigen::Vector3f(aPx);
@@ -662,11 +740,15 @@ void AttControl::writeLogData()
     logData.vPx = quatRotate(qPx.inverse(), vPx);
     logData.rPx = rPx;
     logData.qPx = qPx;
+
+    if (USE_ODOMETRY){
     logData.qOd = qOd;
     logData.rOd = rOd;
     logData.vOd = vOd;
     logData.rEs = rEs;
     logData.vEs = vEs;
+    }
+
     logData.r0 = quat2Eul(qPx);
 
     logger.addData(logData);
