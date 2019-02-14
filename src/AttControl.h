@@ -139,8 +139,8 @@ private:
     Eigen::Vector3f aPx;
     Eigen::Vector3f oPx;
     Eigen::Vector3f aPxClearI;
+    Eigen::Quaternion<float> qPxInit;
     Eigen::Vector3f gIestimated;
-    bool gIinited;
 
     bool imuReady;
     bool posReady;
@@ -169,6 +169,8 @@ private:
     IntegratorVector3f goAccIr;
     IntegratorVector3f accamulateVelIrEstimator;
     IntegratorVector3f accamulateVelIr;
+
+    IntegratorVector3f goLocalVelIr;
 
     std::chrono::high_resolution_clock::time_point initTime;
     uint64_t timeMs;

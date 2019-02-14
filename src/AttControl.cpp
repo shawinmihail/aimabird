@@ -31,7 +31,6 @@ AttControl::AttControl():
 ,useQuatParamTopicName("/mavros/setpoint_attitude/use_quaternion")
 
 ,status(Status::begin)
-,gIinited(false)
 ,imuReady(false)
 ,posReady(false)
 ,velReady(false)
@@ -127,7 +126,7 @@ void AttControl::prepareToFly()
                     break;
 
                 case Status::armed:
-                    done = goToLocalPoint(Eigen::Vector3f (0.f, 0.f, 5.0f), YawStrategy::constant, 0.f);
+                    done = goToLocalPoint(Eigen::Vector3f (0.f, 0.f, 3.0f), YawStrategy::constant, 0.f);
                     if (done) {
                         logger.addEvent("AttCtrl: tookoff", timeMs);
                         status = Status::tookoff;
@@ -136,10 +135,10 @@ void AttControl::prepareToFly()
 
                 case Status::tookoff:
                     if (aimAccepted){
-                        done = goWithVelocity2D(5.f, rInput, yawRateInput);
+                        done = goWithVelocity2D(3.f, rInput, yawRateInput);
                     }
                     else{
-                        goToLocalPoint(Eigen::Vector3f (5.f, 0.f, 5.0f), YawStrategy::constant, -PI/2.f);
+                        goToLocalPoint(Eigen::Vector3f (0.f, 0.f, 3.0f), YawStrategy::constant, 0*PI/2.f);
                     }
 
                     break;
@@ -209,10 +208,6 @@ bool AttControl::checkFeedback()
         status = Status::sensorsReady;
         return true;
     }
-//     if (imuReady && velReady && posReady) {
-//         status = Status::sensorsReady;
-//         return true;
-//     }
     return false;
 }
 
@@ -260,7 +255,14 @@ Eigen::Vector3f AttControl::getRegVector(Eigen::Vector3f dr, Vector3f dv, Eigen:
     }
     I = cutAbsVector3f(I, GO_LOCAL_PID_I_LIM_V);
     Eigen::Vector3f D = Eigen::Vector3f(GO_LOCAL_PID_D_H * dv[0], GO_LOCAL_PID_D_H * dv[1], GO_LOCAL_PID_D_V * dv[2]);
-    Eigen::Vector3f regOutVec = P + I + D + Eigen::Vector3f(0., 0., FREE_FALL_ACC_ABS);
+
+    Eigen::Vector3f DI = cutAbsVector3f(goLocalVelIr.get
+    (
+        Eigen::Vector3f(GO_LOCAL_PID_DI_H * dv[0], GO_LOCAL_PID_DI_H * dv[1], 0.f * dv[2]), dt),
+        GO_LOCAL_PID_DI_LIM
+    );
+
+    Eigen::Vector3f regOutVec = P + I + D + DI + Eigen::Vector3f(0., 0., FREE_FALL_ACC_ABS);
     return regOutVec;
 }
 
@@ -291,28 +293,26 @@ bool AttControl::goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy, float 
     float dt = getLastTickDuration();
     Eigen::Quaternion<float> q = qPx;
 
-
     Eigen::Vector3f r;
     Eigen::Vector3f v;
     if (USE_ODOMETRY){
         r = rEs;
-        v = vEs; // TODO what the hell it works that way&&&&
+        v = vEs; //
     }
     else{
         r = rPx;
         v = quatRotate(q.inverse(), vPx); // TODO what the hell it works that way&&&&
     }
 
-
     Eigen::Vector3f dr = r0 - r;
     dr = cutAbsVector3f(dr, Eigen::Vector3f(GO_LOCAL_INPUT_LIM_H, GO_LOCAL_INPUT_LIM_H, GO_LOCAL_INPUT_LIM_V));
     Eigen::Vector3f dv = -v;
     Eigen::Vector3f reg = getRegVector(dr, dv, v, dt);
-
     float thrust = reg.norm() / TW / FREE_FALL_ACC_ABS;
     thrust = cutTwosidesFloat(thrust, MIN_THRUST, MAX_THRUST);
 
-    Eigen::Quaternion<float> qCtrlOut = quatFromDirAndYaw(reg, yawStrategyParam, 180.f*PI/ 180.f);
+    Eigen::Quaternion<float> qCtrlOut = quatFromDirAndYaw(reg, yawStrategyParam, 5.f*PI/ 180.f);
+    qCtrlOut = qCtrlOut * qPxInit;
     if (USE_QUATERNION){
         pubCtrl(thrust, qCtrlOut);
     }
@@ -336,10 +336,18 @@ bool AttControl::goWithVelocity2D(float h, Eigen::Vector3f v0, float yawRate){
 
     float dt = getLastTickDuration();
     Eigen::Quaternion<float> q = qPx;
-    //Eigen::Vector3f r = rPx;
-    Eigen::Vector3f r = rEs;
-    //Eigen::Vector3f v = quatRotate(qPx.inverse(), vPx);
-    Eigen::Vector3f v = vEs;
+
+    Eigen::Vector3f r;
+    Eigen::Vector3f v;
+    if (USE_ODOMETRY){
+        r = rEs;
+        v = vEs; //
+    }
+    else{
+        r = rPx;
+        v = quatRotate(q.inverse(), vPx); // TODO what the hell it works that way&&&&
+    }
+
     Eigen::Vector3f e = quat2Eul(q);
     float yaw = e[2];
 
@@ -353,13 +361,12 @@ bool AttControl::goWithVelocity2D(float h, Eigen::Vector3f v0, float yawRate){
     if (!yawRateCtrlMode){
         yawRateCtrlMode = true;
         yawPointerForRotate = yaw;
-//         printQuat(qPx);
     }
 
     yawPointerForRotate += yawRate * dt;
-    yawPointerForRotate = modFloat(yawPointerForRotate + PI, 2 * PI) - PI;
+    //yawPointerForRotate = modFloat(yawPointerForRotate + PI, 2 * PI) - PI;
 
-    Eigen::Quaternion<float> qCtrlOut = quatFromDirAndYaw(reg, yawPointerForRotate, 10.f*PI/ 180.f);
+    Eigen::Quaternion<float> qCtrlOut = quatFromDirAndYaw(reg, yawPointerForRotate, 5.f*PI/ 180.f);
     float thrust = reg.norm() / TW / FREE_FALL_ACC_ABS;
     thrust = cutTwosidesFloat(thrust, MIN_THRUST, MAX_THRUST);
     pubCtrl(thrust, qCtrlOut);
@@ -627,14 +634,16 @@ void AttControl::pubCtrl(float thr, const Eigen::Vector3f& v)
 void AttControl::imuCb(const sensor_msgs::Imu& msg)
 {
     aPx = Eigen::Vector3f(msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z);
-    qPx = Eigen::Quaternion<float>(msg.orientation.w, msg.orientation.x, msg.orientation.y, msg.orientation.z);
+    Eigen::Quaternion<float> qPxInput(msg.orientation.w, msg.orientation.x, msg.orientation.y, msg.orientation.z);
     oPx = Eigen::Vector3f(msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z);
 
-    if (!gIinited){
-        gIestimated =  Eigen::Vector3f(aPx);
-        gIestimated = quatRotate(qPx.inverse(), gIestimated);
-        gIinited = true;
+    if (!imuReady){
+        qPxInit = qPxInput;
     }
+    qPx = qPxInput * qPxInit.inverse();
+
+    gIestimated =  Eigen::Vector3f(aPx);
+    gIestimated = quatRotate(qPx.inverse(), gIestimated);
     aPxClearI = quatRotate(qPx.inverse(), aPx) - gIestimated;
     imuReady = true;
 }
@@ -665,8 +674,8 @@ void AttControl::odometryCb(const nav_msgs::Odometry& msg)
     rOd = Eigen::Vector3f(msg.pose.pose.position.x,
                           msg.pose.pose.position.y,
                           msg.pose.pose.position.z);
-    vOd = Eigen::Vector3f(msg.twist.twist.linear.x,
-                          msg.twist.twist.linear.y,
+    vOd = Eigen::Vector3f(-msg.twist.twist.linear.x,
+                          -msg.twist.twist.linear.y,
                           msg.twist.twist.linear.z);
     oOd = Eigen::Vector3f(msg.twist.twist.angular.x,
                           msg.twist.twist.angular.y,
@@ -737,7 +746,8 @@ void AttControl::writeLogData()
 
     logData.timeMs = ms.count();
 //     logData.timeMs = uint64_t(ros::Time::now().toSec() * 1e3);
-    logData.vPx = quatRotate(qPx.inverse(), vPx);
+    //logData.vPx = quatRotate(qPx.inverse(), vPx);
+    logData.vPx = vPx;
     logData.rPx = rPx;
     logData.qPx = qPx;
 
@@ -747,6 +757,12 @@ void AttControl::writeLogData()
     logData.vOd = vOd;
     logData.rEs = rEs;
     logData.vEs = vEs;
+    }else {
+    logData.qOd = Eigen::Quaternion<float>(0.f, 0.f, 0.f, 0.f);
+    logData.rOd = Eigen::Vector3f(0.f, 0.f, 0.f);
+    logData.vOd = Eigen::Vector3f(0.f, 0.f, 0.f);
+    logData.rEs = Eigen::Vector3f(0.f, 0.f, 0.f);
+    logData.vEs = Eigen::Vector3f(0.f, 0.f, 0.f);
     }
 
     logData.r0 = quat2Eul(qPx);

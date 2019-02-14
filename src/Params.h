@@ -11,10 +11,10 @@ const float PI = 3.1415f;                                                     //
 const Eigen::Vector3f UNIT_Z(0.f, 0., 1.f);                                   // z unit vector
 const Eigen::Vector3f UNIT_X(1.f, 0., 0.f);                                   // z unit vector
 
-const int CTRL_RATE = 66;                                                   //control rate in HZ
+const int CTRL_RATE = 100;                                                   //control rate in HZ
 
 /* control params */
-const bool USE_QUATERNION = false;                                             // if false use angular velocity control, else -- quaternion
+const bool USE_QUATERNION = true;                                             // if false use angular velocity control, else -- quaternion
 const bool USE_ODOMETRY = false;                                             // if false use px4 pos vel feedback, else -- odometry estimated
 const float MIN_THRUST = 0.2f;                                               // minimum in flight thrust (% / 100); value used for null thrsut at the ground
 const float MAX_THRUST = 0.8f;                                               // maxim in flight thrust (% / 100)
@@ -30,7 +30,10 @@ const float GO_LOCAL_ANTIWINDUP_PARAM_V = 0.3f;                                /
 
 const float GO_LOCAL_INPUT_LIM_H = 1.5f;                                          // cut dr on GO_LOCAL_INPUT_ERROR_LIM vertical
 const float GO_LOCAL_PID_P_H = 0.4f;                                            // position error -> thrust PID proportional
-const float GO_LOCAL_PID_D_H = 1.4f;                                            // position error -> thrust PID differential
+const float GO_LOCAL_PID_D_H = 1.9f;                                            // position error -> thrust PID differential
+
+const float GO_LOCAL_PID_DI_H = 1.0f;
+const float GO_LOCAL_PID_DI_LIM = 0.25f;
 
 const float POSE_EPS = 0.5f;
 const float YAW_RATE_DES = 0.2f;
