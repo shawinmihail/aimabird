@@ -68,10 +68,15 @@ public:
 //         ss << vector3fToStr(a0);
 //         ss << vector3fToStr(o0);
 
-//         ss << debug1  << ",";
-//         ss << debug2  << ",";
-//         ss << debug3  << ",";
-//         ss << debug4  << ",";
+        ss << rAlt  << ",";
+        ss << vAlt  << ",";
+        ss << rAltEs  << ",";
+        ss << vAltEs  << ",";
+
+        ss << rLid  << ",";
+        ss << vLid  << ",";
+        ss << rLidEs  << ",";
+        ss << vLidEs  << ",";
         ss << "\n";
 
         return ss.str();
@@ -103,10 +108,14 @@ public:
 //         ss << vector3fNameToStr(nameOf(a0));
 //         ss << vector3fNameToStr(nameOf(o0));
 
-//         ss << nameOf(debug1) << ",";
-//         ss << nameOf(debug2) << ",";
-//         ss << nameOf(debug3) << ",";
-//         ss << nameOf(debug4) << ",";
+        ss << nameOf(rAlt) << ",";
+        ss << nameOf(vAlt) << ",";
+        ss << nameOf(rAltEs) << ",";
+        ss << nameOf(vAltEs) << ",";
+        ss << nameOf(rLid) << ",";
+        ss << nameOf(vLid) << ",";
+        ss << nameOf(rLidEs) << ",";
+        ss << nameOf(vLidEs) << ",";
         ss << "\n";
 
         return ss.str();
@@ -169,10 +178,14 @@ public:
     Eigen::Vector3f o0;
 
 
-    float debug1;
-    float debug2;
-    float debug3;
-    float debug4;
+    float rAlt;
+    float vAlt;
+    float rAltEs;
+    float vAltEs;
+    float rLid;
+    float vLid;
+    float rLidEs;
+    float vLidEs;
 
     float thr;
 };
@@ -298,10 +311,6 @@ public:
         ld->rEs = biteVecF(v);
         ld->vEs = biteVecF(v);
         ld->q0 = biteQuatF(v);
-        ld->debug1= biteFloat(v);
-        ld->debug2= biteFloat(v);
-        ld->debug3= biteFloat(v);
-        ld->debug4= biteFloat(v);
 
         return ok;
     }

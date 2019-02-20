@@ -51,7 +51,7 @@ class AttitudeController:
         self.r = [data.data[0], data.data[1], data.data[2]]
 
     def vel_cb(self, data):
-        self.v0 = [data.linear.x, data.linear.y, 0.]
+        self.v0 = [data.linear.x, data.linear.y, 0., data.angular.z]
 
     def send_target(self):
         msg = PoseStamped()
@@ -67,21 +67,19 @@ class AttitudeController:
         self.target_pub.publish(msg)
 
     def main(self):
-        self.send_target()
+        #self.send_target()
         self.time = rospy.Time.now()
 
-        yaw_rate = 0.0  # rad / s
-        self.send_cmd([0.3, 0., 0., -0.3])  # test yaw rate
-        return
+        #yaw_rate = 0.0  # rad / s
+        #self.send_cmd([0.15, 0., 0., 0.])  # test yaw rate
+        #return
 
         if self.r is None:  # wait telemetry
-            print("waiting r")
+            print("waiting aimbird")
             return
 
         if self.v0 is None:
-            # self.v0 = self.next_point()
-            # print("POINT %s NEXT" % self.v0)
-            print("waiting vel")
+            print("waiting odometry")
             return
 
         self.send_cmd(self.v0)

@@ -22,6 +22,10 @@ void printQuat(const Eigen::Quaternion<float>& q, std::string name="q"){
     std::cout << name << ": "<< q.w() << " " << q.x()<< " " << q.y()<< " " << q.z() << "\n\n";
 }
 
+void printFloat(float f, std::string name="f"){
+    std::cout << name << ": "<< f << "\n\n";
+}
+
 bool isZeroFloat(float v, float eps = 1e-3){
     if (std::fabs(v) < eps){
         return true;
@@ -98,7 +102,7 @@ Eigen::Vector3f cutTwosidesVector3f(const Eigen::Vector3f& v, float min, float m
                           );
 };
 
-Eigen::Quaternion<float> quatFromDirAndYaw(const Eigen::Vector3f v, float yaw, float bowLimit=PI){ // TODO thats a mistake
+Eigen::Quaternion<float> quatFromDirAndYaw(const Eigen::Vector3f v, float yaw, float bowLimit=PI){
 
     Eigen::Quaternion<float> qYaw(cos(yaw/2.f), 0.f, 0.f, sin(yaw/2.f));
     if (isZeroVector3f(v)){
@@ -106,6 +110,9 @@ Eigen::Quaternion<float> quatFromDirAndYaw(const Eigen::Vector3f v, float yaw, f
     }
 
     Eigen::Vector3f pin = UNIT_Z.cross(v);
+    if (isZeroVector3f(pin)){
+        return qYaw;
+    }
     pin.normalize();
     float cosA = v.normalized().dot(UNIT_Z);
     cosA = cutAbsFloat(cosA, 1.f - 1e-9); // check if |cosA| < 1 for avoid acos -> Nan
@@ -148,8 +155,8 @@ public:
         return _res;
     }
 
-    void reset(){
-        _res = 0.f;
+    void reset(float part = 0.f){
+        _res = _res * part;
     }
 
 private:
@@ -233,8 +240,12 @@ public:
         return _res;
     }
 
-    void reset(){
-        _res *= 0.f;
+    void reset(float part = 0.f){
+        _res = _res * part;
+    }
+
+    void deflate(float d){
+        _res = _res - d * Eigen::Vector3f(1.f, 1.f, 1.f);
     }
 
 private:
@@ -333,5 +344,89 @@ float modFloat(float x, float y)
     }
 
     return m;
+};
+
+template <class T>
+class DelayIters {
+public:
+    DelayIters(int i = 8){
+        _i = i;
+    }
+
+    T get(const T& input){
+        _v.push_back(input);
+        if (_v.size()>_i){
+            _v.erase(_v.begin());
+        }
+        return _v.at(0);
+    }
+
+private:
+    std::vector<T> _v;
+    int _i;
+};
+
+template <class T>
+class SeriesDifferentiator {
+public:
+    struct Value {
+        template <typename F>
+        Value(F&& value, uint64_t time)
+            : value(std::forward<F>(value))
+            , time(time)
+        {
+        }
+
+        T value;
+        uint64_t time;
+    };
+
+    SeriesDifferentiator(int i = 3) : _r(false){
+        assert(i != 0);
+        _i = i;
+    }
+
+    template <typename F>
+    T get(F&& input, uint64_t t){
+        _v.emplace_back(std::forward<F>(input), t);
+        if (_v.size() >_i){
+            _r = true;
+            _v.erase(_v.begin());
+            float dt = (_v.back().time - _v.front().time) / 1e3f;
+            return (_v.back().value - _v.front().value) / dt;
+        }
+        return T();
+    }
+
+    bool ready() {
+        return _r;
+    }
+
+private:
+    std::vector<Value> _v;
+    int _i;
+    bool _r;
+};
+
+class slowYawManager
+{
+public:
+    slowYawManager(){};
+
+    float get(float yaw, float yaw0, float dt){
+        float dyaw = shortRot(yaw0, yaw);
+        if(isZeroFloat(dyaw)){
+            return yaw;
+        };
+        return yaw + cutAbsFloat(dyaw, 0.1f);
+    }
+
+    float shortRot(float from, float to)
+{
+    return std::fmod(from - to + 5.f * PI, PI * 2.f) - PI;
+    return std::fmod(from - to + 5.f * PI, PI * 2.f) - PI;
 }
+
+};
+
 

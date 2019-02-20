@@ -9,6 +9,7 @@
 
 #include "ros/ros.h"
 #include "sensor_msgs/Imu.h"
+#include "sensor_msgs/LaserScan.h"
 #include "geometry_msgs/PoseStamped.h"
 #include "geometry_msgs/TwistStamped.h"
 #include "geometry_msgs/PoseWithCovarianceStamped.h"
@@ -76,16 +77,16 @@ private:
     bool estimateState();
     bool setOffboard();
     bool arm();
-    bool takeoff();
-    bool goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy, float yawStrategyParam);
+    bool takeoff(float h);
+    bool emergencyLand();
+    bool goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy, float yaw);
     bool goOnRoute(std::vector<Eigen::Vector3f> route); //TODO not implemented yet
-    bool goRelativePosition(Eigen::Vector3f r0);
-    bool goWithVelocity(float h, Eigen::Vector3f v0, YawStrategy strategy, float yawStrategyParam);
-    bool goWithVelocity2D(float h, Eigen::Vector3f v0, float yawRate);
+    bool goWithVelocity(Eigen::Vector3f v0, float yaw);
+    //bool goWithVelocity2D(float h, Eigen::Vector3f v0, float yawRate);
     bool goWithAcc(Eigen::Vector3f a0);
     bool accomulateVelocityWithImu(Eigen::Vector3f v0);
     bool accomulateVelocityWithImu(float vz);
-    Eigen::Vector3f getRegVector(Eigen::Vector3f dr, Vector3f dv, Eigen::Vector3f v, float dt);
+    Eigen::Vector3f getRegVector(Eigen::Vector3f dr, Vector3f dv, float dt);
     Eigen::Vector3f getTwistVector(const Eigen::Quaternion<float>& q0, const Eigen::Vector3f& w0);
 
     void pubCtrl(float thr, const Eigen::Quaternion<float>& quat);
@@ -97,6 +98,8 @@ private:
     void stateCb(const mavros_msgs::State& msg);
     void odometryCb(const nav_msgs::Odometry& msg);
     void photonCmdCb(const std_msgs::Float32MultiArray& msg);
+    void lidCb(const sensor_msgs::LaserScan& msg);
+    void altCb(const sensor_msgs::LaserScan& msg);
 
 public:
     void test();
@@ -115,6 +118,8 @@ private:
     std::string photonCmdTopicName;
     std::string photonTmTopicName;
     std::string useQuatParamTopicName;
+    std::string lidTopicName;
+    std::string altTopicName;
 
     ros::NodeHandle nodeHandle;
     ros::ServiceClient modeService;
@@ -125,6 +130,8 @@ private:
     ros::Subscriber stateSub;
     ros::Subscriber cmdSub;
     ros::Subscriber odometrySub;
+    ros::Subscriber lidSub;
+    ros::Subscriber altSub;
     ros::Subscriber photonCmdSub;
     ros::Publisher attPub;
     ros::Publisher velPub;
@@ -145,6 +152,9 @@ private:
     bool imuReady;
     bool posReady;
     bool velReady;
+    bool odometryReady;
+    bool lidReady;
+    bool altReady;
 
     mavros_msgs::State mavState;
 
@@ -153,10 +163,22 @@ private:
     Eigen::Vector3f vOd;
     Eigen::Vector3f oOd;
 
+    float rLid;
+    float vLid;
+    float rAlt;
+    float vAlt;
+    float rLidEs;
+    float vLidEs;
+    float rAltEs;
+    float vAltEs;
+
     Eigen::Vector3f rInput;
+
     float yawRateInput;
     float yawPointerForRotate;
     bool yawRateCtrlMode;
+    slowYawManager yawManager;
+
     bool aimAccepted;
 
     Status status;
@@ -183,5 +205,12 @@ private:
     Ekf ekfX;
     Ekf ekfY;
     Ekf ekfZ;
-    bool odometryReady;
+
+    Ekf ekfAlt;
+    Ekf ekfLid;
+    SeriesDifferentiator<float> altSerDiff;
+    SeriesDifferentiator<float> lidSerDiff;
+
+//     DelayIters<Eigen::Vector3f> delayR;
+//     DelayIters<Eigen::Vector3f> delayV;
 };

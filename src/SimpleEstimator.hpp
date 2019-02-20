@@ -4,9 +4,15 @@
 
 using namespace Eigen;
 
+enum EkfMode{
+    odometry,
+    lidar,
+    altimetr
+};
+
 class Ekf {
 public:
-    Ekf(): inited(false), x(0.f, 0.f)
+    Ekf(EkfMode mode = odometry): inited(false), x(0.f, 0.f)
     {
         E << 1.f, 0.f,
              0.f, 1.f;
@@ -16,14 +22,36 @@ public:
 
         Phi << 0.f, 1.f,
                0.f, 0.f;
-
-        Q << 1e-3f, 0.f,
-             0.f,  1e-3f;
+        if (mode == odometry){
+        Q << 2e-3f, 0.f,
+             0.f,  4e-3f;
 
         R << 1e-1f, 0.f,
              0.f,  1e0f;
 
         P = 100 * Q;
+        }
+        else if (mode == altimetr) {
+        Q << 4e-3f, 0.f,
+             0.f,  8e-3f;
+
+        R << 1e-2f, 0.f,
+             0.f,  1e0f;
+
+        P = 100 * Q;
+        }
+        else if (mode == lidar) {
+        Q << 4e-3f, 0.f,
+             0.f,  8e-3f;
+
+        R << 1e-2f, 0.f,
+             0.f,  1e0f;
+
+        P = 100 * Q;
+        }
+        else {
+            assert(false);
+        }
     }
 
     Vector2f model(const Vector2f& x, float a, float dt){
