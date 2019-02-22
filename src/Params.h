@@ -15,7 +15,7 @@ const int CTRL_RATE = 100;                                                   //c
 
 /* control params */
 const bool USE_QUATERNION = true;                                             // if false use angular velocity control, else -- quaternion
-const bool USE_GPS = true;                                             // if false use px4 pos vel feedback, else -- odometry estimated
+const bool USE_GPS = false;                                             // if false use px4 pos vel feedback, else -- odometry estimated
 const bool USE_ODOMETRY = false;                                             // if false use px4 pos vel feedback, else -- odometry estimated
 const bool USE_ALTIMETR = false;
 const bool USE_LIDAR = false;
