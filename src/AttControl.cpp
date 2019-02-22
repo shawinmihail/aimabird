@@ -135,8 +135,7 @@ void AttControl::prepareToFly()
                     break;
 
                 case Status::armed:
-                    //done = goToLocalPoint(Eigen::Vector3f (0.f, 0.f, 1.0f), YawStrategy::constant, 0*PI/2.f);
-                    done = takeoff(3.0f);
+                    done = accumulateWithImu(Eigen::Vector3f (0.f, 0.f, 1.5f), Eigen::Vector3f(0.f, 0.f, 1.0f));
                     if (done) {
                         logger.addEvent("AttCtrl: tookoff", timeMs);
                         status = Status::tookoff;
@@ -148,18 +147,23 @@ void AttControl::prepareToFly()
                         //done = goWithVelocity2D(5.f, rInput, yawRateInput);
                     }
                     else{
-                        //goToLocalPoint(Eigen::Vector3f (5.f, -5.f, 1.0f), YawStrategy::constant, 0*PI/2.f);
-                        goWithVelocity(Eigen::Vector3f (0.3f, -0.f, 0.f), 0.f);
-                        //emergencyLand();
+                        done = accumulateWithImu(Eigen::Vector3f (0.f, 0.f,-1.f * EST_VEL_EPS));
                     }
 
                     break;
 
                 case Status::stabilized:
-//                     done = accomulateVelocityWithImu(Eigen::Vector3f (0.f, 0.f, 0.0f));
+//                     done = accumulateVelocityWithImu(Eigen::Vector3f (0.f, 0.f, 0.0f));
                     if (done) {
                         logger.addEvent("AttCtrl: stabilized");
                         status = Status::stabilized;
+                    }
+                    break;
+
+                case Status::stoped:
+                    done = stop();
+                    if (done) {
+                        logger.addEvent("AttCtrl: stoped");
                     }
                     break;
             }
@@ -214,10 +218,10 @@ bool AttControl::init()
 
 bool AttControl::checkFeedback()
 {
-    if (!USE_GPS && !USE_ODOMETRY){
-        logger.addEvent("Wrong configuration: no pos vel feedback");
-        return false;
-    }
+//     if (!USE_GPS && !USE_ODOMETRY){
+//         logger.addEvent("Wrong configuration: no pos vel feedback");
+//         return false;
+//     }
 
     bool check = imuReady;
     if (USE_GPS) {check = check && velReady && posReady;}
@@ -506,77 +510,53 @@ bool AttControl::goWithAcc(Eigen::Vector3f a0) // TODO remake
     return true;
 }
 
-bool AttControl::accomulateVelocityWithImu(Eigen::Vector3f v0) // TODO how remove small oscilations?
-{   /* d time for calc */
-//     float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
-//
-//     /* velocity estimation */
-//     Eigen::Vector3f v = accamulateVelIrEstimator.get(aPxClearI, dt);
-//     Eigen::Vector3f dv = v0 - v;
-//
-//     /* velocity regulator */
-//     Eigen::Vector3f integralPart = ACCUM_VEL_PID_I * accamulateVelIr.get(dv, dt);
-//     integralPart = cutAbsVector3f(Eigen::Vector3f(0.f, 0.f, integralPart[2]), ACCUM_VEL_PID_I_ERROR_LIM); // integral ONLY for altitude
-//
-//     Eigen::Vector3f regOutVec = cutAbsVector3f(ACCUM_VEL_PID_P * dv, ACCUM_VEL_PID_P_ERROR_LIM)
-//     + integralPart
-//     + Eigen::Vector3f(0., 0., 1.f / TW);
-//
-//     float yaw = 0*PI/2.f;
-//     q0 = quatFromDirAndYaw(regOutVec, yaw, 30.f*PI/ 180.f);
-//
-//     /* reg + hower thrust */
-//     float thrust = regOutVec.dot(UNIT_Z);
-//
-//     /* pub */
-//     thrust = cutTwosidesFloat(thrust, MIN_THRUST, MAX_THRUST);
-//     logData.debug1 = v[0];
-//     logData.debug2 = v[1];
-//     logData.debug3 = v[2];
-//     logData.debug4 = thrust;
-//     pubCtrl(thrust, q0);
-//
-//     if (isZeroVector3f(dv, EST_VEL_EPS)){
+bool AttControl::accumulateWithImu(const Eigen::Vector3f& v0, const Eigen::Vector3f& p0)
+{
+    float dt = getLastTickDuration();
+    Eigen::Vector3f v = accumulateVelIrEstimator.get(aPxClearI, dt);
+    Eigen::Vector3f p = accumulatePosIrEstimator.get(v, dt);
+    Eigen::Vector3f dp = p0 - p;
+    Eigen::Vector3f dv = v0 - v;
+    Eigen::Vector3f e = quat2Eul(qPx);
+    float yaw = e[2];
+
+    Eigen::Vector3f P = cutAbsVector3f(ACCUM_VEL_PID_P * dv, ACCUM_VEL_PID_P_ERROR_LIM);
+    Eigen::Vector3f I;
+    if (fabs(aPxClearI[2]) < 0.2f){
+        I = ACCUM_VEL_PID_I * accumulateVelIr.get(dv, dt);
+    }
+    else{
+        I = ACCUM_VEL_PID_I * accumulateVelIr.get();
+    }
+    I = cutAbsVector3f(Eigen::Vector3f(0.f, 0.f, I[2]), ACCUM_VEL_PID_I_ERROR_LIM); // integral ONLY for altitude
+    Eigen::Vector3f regOutVec = P + I;
+
+    Eigen::Quaternion<float> qCtrlOut = quatFromDirAndYaw(regOutVec, yaw, MAX_BOW);
+    qCtrlOut = qCtrlOut * qPxInit;
+    float thrust = regOutVec.dot(UNIT_Z);
+
+    if (aPxClearI.norm() > EMERG_ACC_LIM){
+        status = Status::stoped;
+        return false;
+    };
+
+    thrust = cutTwosidesFloat(thrust, MIN_THRUST, MAX_THRUST);
+    pubCtrl(thrust, qCtrlOut);
+
+//     if (/*isZeroVector3f(dv, EST_VEL_EPS) ||*/ isZeroVector3f(dp, EST_VEL_EPS)){
 //         return true;
 //     }
+    if (dp[2] < 0.f){return true;}
     return false;
 }
 
-bool AttControl::accomulateVelocityWithImu(float vz) // TODO dont ready yet
-{   /* d time for calc */
-//     float dt = cutAbsFloat(dTimeMs / 1e3f, MIN_TICK_FOR_CALCS);
-//
-//     /* velocity estimation */
-//     Eigen::Vector3f v = accamulateVelIrEstimator.get(aPxClearI, dt);
-//     Eigen::Vector3f dv = (vz - v[2]);
-//
-//     /* velocity regulator */
-//     Eigen::Vector3f integralPart = ACCUM_VEL_PID_I * accamulateVelIr.get(dv, dt);
-//     integralPart = cutAbsFloat(integralPart[2], ACCUM_VEL_PID_I_ERROR_LIM); // integral ONLY for altitude
-//
-//     Eigen::Vector3f regOutVec = cutAbsVector3f(ACCUM_VEL_PID_P * dv, ACCUM_VEL_PID_P_ERROR_LIM)
-//     + integralPart
-//     + Eigen::Vector3f(0., 0., 1.f / TW);
-//
-//     float yaw = 0*PI/2.f;
-//     q0 = quatFromDirAndYaw(regOutVec, yaw, 30.f*PI/ 180.f);
-//
-//     /* reg + hower thrust */
-//     float thrust = regOutVec.dot(UNIT_Z);
-//
-//     /* pub */
-//     thrust = cutTwosidesFloat(thrust, MIN_THRUST, MAX_THRUST);
-//     logData.debug1 = v[0];
-//     logData.debug2 = v[1];
-//     logData.debug3 = v[2];
-//     logData.debug4 = thrust;
-//     pubCtrl(thrust, q0);
-//
-//     if (isZeroVector3f(dv, EST_VEL_EPS)){
-//         return true;
-//     }
-    return false;
+bool AttControl::stop()
+{
+    Eigen::Quaternion<float> qCtrlOut = qPx * qPxInit;
+    pubCtrl(MIN_THRUST, qCtrlOut);
+    return true;
 }
+
 
 void AttControl::initServs()
 {
@@ -685,11 +665,10 @@ void AttControl::imuCb(const sensor_msgs::Imu& msg)
 
     if (!imuReady){
         qPxInit = qPxInput;
+        gIestimated =  Eigen::Vector3f(aPx);
+        gIestimated = quatRotate(qPxInit.inverse(), gIestimated);
     }
     qPx = qPxInput * qPxInit.inverse();
-
-    gIestimated =  Eigen::Vector3f(aPx);
-    gIestimated = quatRotate(qPx.inverse(), gIestimated);
     aPxClearI = quatRotate(qPx.inverse(), aPx) - gIestimated;
     imuReady = true;
 }
@@ -833,20 +812,24 @@ void AttControl::photonCmdCb(const std_msgs::Float32MultiArray& msg)
 
 void AttControl::writeLogData()
 {
+    Eigen::Vector3f nullV(0.f, 0.f, 0.f);
     std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(
     std::chrono::system_clock::now().time_since_epoch()
     );
 
     logData.timeMs = ms.count();
-    //logData.timeMs = uint64_t(ros::Time::now().toSec() * 1e3);
-    //logData.vPx = quatRotate(qPx.inverse(), vPx);
-    logData.vPx = vPx;
-    logData.rPx = rPx;
     logData.qPx = qPx;
+    logData.aPx = aPxClearI;
+    logData.r0 = accumulatePosIrEstimator.get();
+    logData.v0 = accumulateVelIrEstimator.get();
 
     if (USE_GPS){
         logData.vPx = vPx;
         logData.rPx = rPx;
+    }
+    else{
+        logData.vPx = nullV;
+        logData.rPx = nullV;
     }
 
     if (USE_ODOMETRY){
@@ -856,11 +839,11 @@ void AttControl::writeLogData()
         logData.rEs = rEs;
         logData.vEs = vEs;
     }else {
-        logData.qOd = Eigen::Quaternion<float>(0.f, 0.f, 0.f, 0.f);
-        logData.rOd = Eigen::Vector3f(0.f, 0.f, 0.f);
-        logData.vOd = Eigen::Vector3f(0.f, 0.f, 0.f);
-        logData.rEs = Eigen::Vector3f(0.f, 0.f, 0.f);
-        logData.vEs = Eigen::Vector3f(0.f, 0.f, 0.f);
+        logData.qOd = Eigen::Quaternion<float>(1, 0, 0, 0);
+        logData.rOd = nullV;
+        logData.vOd = nullV;
+        logData.rEs = nullV;
+        logData.vEs = nullV;
     }
 
     if (USE_ALTIMETR){
@@ -869,6 +852,12 @@ void AttControl::writeLogData()
         logData.rAltEs = rAltEs;
         logData.vAltEs = vAltEs;
     }
+    else{
+        logData.rAlt = 0.f;
+        logData.vAlt = 0.f;
+        logData.rAltEs = 0.f;
+        logData.vAltEs = 0.f;
+    }
 
     if (USE_LIDAR){
         logData.rLid = rLid;
@@ -876,8 +865,12 @@ void AttControl::writeLogData()
         logData.rLidEs = rLidEs;
         logData.vLidEs = vLidEs;
     }
-
-    logData.r0 = quat2Eul(qPx);
+    else{
+        logData.rLid = 0.f;
+        logData.vLid = 0.f;
+        logData.rLidEs = 0.f;
+        logData.vLidEs = 0.f;
+    }
 
     logger.addData(logData);
 }

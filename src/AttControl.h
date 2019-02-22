@@ -35,7 +35,8 @@ enum Status{
     offboarded,
     armed,
     tookoff,
-    stabilized
+    stabilized,
+    stoped
 };
 
 enum Command {
@@ -79,13 +80,13 @@ private:
     bool arm();
     bool takeoff(float h);
     bool emergencyLand();
+    bool stop();
     bool goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy, float yaw);
     bool goOnRoute(std::vector<Eigen::Vector3f> route); //TODO not implemented yet
     bool goWithVelocity(Eigen::Vector3f v0, float yaw);
     //bool goWithVelocity2D(float h, Eigen::Vector3f v0, float yawRate);
     bool goWithAcc(Eigen::Vector3f a0);
-    bool accomulateVelocityWithImu(Eigen::Vector3f v0);
-    bool accomulateVelocityWithImu(float vz);
+    bool accumulateWithImu(const Eigen::Vector3f& v0, const Eigen::Vector3f& p0 = std::numeric_limits<float>::max() * Eigen::Vector3f(1.f, 1.f, 1.f));
     Eigen::Vector3f getRegVector(Eigen::Vector3f dr, Vector3f dv, float dt);
     Eigen::Vector3f getTwistVector(const Eigen::Quaternion<float>& q0, const Eigen::Vector3f& w0);
 
@@ -189,8 +190,9 @@ private:
     DifferenciatorVector3f goLocalDr;
     IntegratorVector3f goLocalIr;
     IntegratorVector3f goAccIr;
-    IntegratorVector3f accamulateVelIrEstimator;
-    IntegratorVector3f accamulateVelIr;
+    IntegratorVector3f accumulateVelIrEstimator;
+    IntegratorVector3f accumulatePosIrEstimator;
+    IntegratorVector3f accumulateVelIr;
 
     IntegratorVector3f goLocalVelIr;
 

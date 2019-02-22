@@ -7,6 +7,13 @@
 #include <ros/ros.h>
 #include <fcntl.h>
 #include <Eigen/Dense>
+#include "Params.h"
+
+#include <unistd.h>
+#include <sys/types.h>
+#include <pwd.h>
+struct passwd *pw = getpwuid(getuid());
+const char *homedir = pw->pw_dir;
 
 #define nameOf(name) #name
 
@@ -48,35 +55,40 @@ public:
 
         ss << timeMs << ",";
         ss << quaternionToStr(qPx);
+
+        if (USE_GPS){
         ss << vector3fToStr(rPx);
         ss << vector3fToStr(vPx);
+        }
         ss << vector3fToStr(aPx);
 //         ss << vector3fToStr(oPx);
 
+        if (USE_ODOMETRY){
         ss << quaternionToStr(qOd);
         ss << vector3fToStr(rOd);
         ss << vector3fToStr(vOd);
 
         ss << vector3fToStr(rEs);
         ss << vector3fToStr(vEs);
-//         ss << vector3fToStr(aGz);
-//         ss << vector3fToStr(oGz);
+        }
 
         ss << quaternionToStr(q0);
         ss << vector3fToStr(r0);
         ss << vector3fToStr(v0);
-//         ss << vector3fToStr(a0);
-//         ss << vector3fToStr(o0);
 
+        if (USE_ALTIMETR){
         ss << rAlt  << ",";
         ss << vAlt  << ",";
         ss << rAltEs  << ",";
         ss << vAltEs  << ",";
+        }
 
+        if (USE_LIDAR){
         ss << rLid  << ",";
         ss << vLid  << ",";
         ss << rLidEs  << ",";
         ss << vLidEs  << ",";
+        }
         ss << "\n";
 
         return ss.str();
@@ -88,17 +100,22 @@ public:
         ss << nameOf(timeMs) << ",";
 
         ss << quaternionNameToStr(nameOf(qPx));
+
+        if (USE_GPS){
         ss << vector3fNameToStr(nameOf(rPx));
         ss << vector3fNameToStr(nameOf(vPx));
+        }
+
         ss << vector3fNameToStr(nameOf(aPx));
 //         ss << vector3fNameToStr(nameOf(oPx));
 
+        if (USE_ODOMETRY){
         ss << quaternionNameToStr(nameOf(qOd));
         ss << vector3fNameToStr(nameOf(rOd));
         ss << vector3fNameToStr(nameOf(vOd));
-
         ss << vector3fNameToStr(nameOf(rEs));
         ss << vector3fNameToStr(nameOf(vEs));
+        }
 //         ss << vector3fNameToStr(nameOf(aGz));
 //         ss << vector3fNameToStr(nameOf(oGz));
 
@@ -108,14 +125,18 @@ public:
 //         ss << vector3fNameToStr(nameOf(a0));
 //         ss << vector3fNameToStr(nameOf(o0));
 
+        if (USE_ALTIMETR){
         ss << nameOf(rAlt) << ",";
         ss << nameOf(vAlt) << ",";
         ss << nameOf(rAltEs) << ",";
         ss << nameOf(vAltEs) << ",";
+        }
+        if (USE_LIDAR){
         ss << nameOf(rLid) << ",";
         ss << nameOf(vLid) << ",";
         ss << nameOf(rLidEs) << ",";
         ss << nameOf(vLidEs) << ",";
+        }
         ss << "\n";
 
         return ss.str();
@@ -193,17 +214,18 @@ public:
 class Logger{
 
 public:
-    Logger(std::string dataPath = "/home/acsl/1simflightlogs/ctrl_data.csv",
-           std::string eventsPath = "/home/acsl/1simflightlogs/ctrl_events.csv",
+    Logger(std::string dataPath = "/1simflightlogs/ctrl_data.csv",
+           std::string eventsPath = "/1simflightlogs/ctrl_events.csv",
            int dataWritePeriod=10):
-     _pathDataLog(dataPath)
-    ,_pathEventsLog(eventsPath)
+     _pathDataLog(std::string(homedir) + dataPath)
+    ,_pathEventsLog(std::string(homedir) + eventsPath)
     ,_lastDataWriteTimeMs(-1)
     ,_dataWritePeriodMs(dataWritePeriod)
     ,_headered(false)
     {
         _eventsFile = ::fopen(_pathEventsLog.c_str(), "w");
         _dataFile = ::fopen(_pathDataLog.c_str(), "w");
+        std::cout << _pathDataLog;
     }
 
     void addEvent(std::string event, uint64_t timeMs = -1, bool printToConsole = true){
