@@ -225,7 +225,7 @@ public:
     {
         _eventsFile = ::fopen(_pathEventsLog.c_str(), "w");
         _dataFile = ::fopen(_pathDataLog.c_str(), "w");
-        std::cout << _pathDataLog;
+        std::cout << "log folder is: " << _pathDataLog << std::endl;
     }
 
     void addEvent(std::string event, uint64_t timeMs = -1, bool printToConsole = true){
