@@ -135,7 +135,7 @@ void AttControl::prepareToFly()
                     break;
 
                 case Status::armed:
-                    done = accumulateWithImu(Eigen::Vector3f (0.f, 0.f, 1.5f), Eigen::Vector3f(0.f, 0.f, 1.0f));
+                    done = accumulateWithImu(Eigen::Vector3f (0.f, 0.f, 1.0f), Eigen::Vector3f(0.f, 0.f, 1.0f));
                     if (done) {
                         logger.addEvent("AttCtrl: tookoff", timeMs);
                         status = Status::tookoff;
