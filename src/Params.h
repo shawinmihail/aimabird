@@ -3,24 +3,24 @@
 #include <Eigen/Dense>
 
 /* constants */
-const std::string OFFBOARD("OFFBOARD");                                     // ros offboard mode
-const std::string FRAME_ID("map");                                          // ros rutines
-const int QUENUE_DEPTH = 10;                                                // ros nodes quenue depth
+const std::string OFFBOARD("OFFBOARD");                                      // ros offboard mode
+const std::string FRAME_ID("map");                                           // ros rutines
+const int QUENUE_DEPTH = 10;                                                 // ros nodes quenue depth
 const float FREE_FALL_ACC_ABS = 10.f;                                        // free fall acc approx
-const float PI = 3.1415f;                                                     // math Pi
-const Eigen::Vector3f UNIT_Z(0.f, 0., 1.f);                                   // z unit vector
-const Eigen::Vector3f UNIT_X(1.f, 0., 0.f);                                   // z unit vector
+const float PI = 3.1415f;                                                    // math Pi
+const Eigen::Vector3f UNIT_Z(0.f, 0., 1.f);                                  // z unit vector
+const Eigen::Vector3f UNIT_X(1.f, 0., 0.f);                                  // z unit vector
 
 const int CTRL_RATE = 100;                                                   //control rate in HZ
 
 /* control params */
 const bool USE_QUATERNION = true;                                             // if false use angular velocity control, else -- quaternion
-const bool USE_GPS = false;                                             // if false use px4 pos vel feedback, else -- odometry estimated
-const bool USE_ODOMETRY = false;                                             // if false use px4 pos vel feedback, else -- odometry estimated
+const bool USE_GPS = false;                                                   // if false use px4 pos vel feedback, else -- odometry estimated
+const bool USE_ODOMETRY = true;                                              // if false use px4 pos vel feedback, else -- odometry estimated
 const bool USE_ALTIMETR = true;
 const bool USE_LIDAR = true;
-const float MIN_THRUST = 0.2f;                                               // minimum in flight thrust (% / 100); value used for null thrsut at the ground
-const float MAX_THRUST = 0.8f;                                               // maxim in flight thrust (% / 100)
+const float MIN_THRUST = 0.2f;                                                // minimum in flight thrust (% / 100); value used for null thrsut at the ground
+const float MAX_THRUST = 0.8f;                                                // maxim in flight thrust (% / 100)
 const float TW = 1.7f;
 const float MAX_BOW = 7.f*PI/ 180.f;
 

@@ -25,7 +25,7 @@ AttControl::AttControl():
 ,setattTopicName("/mavros/setpoint_attitude/attitude")
 ,setthrTopicName("/mavros/setpoint_attitude/thrust")
 ,cmdVelTopicName("/mavros/setpoint_attitude/cmd_vel")
-,odometryTopicName("/rtabmap/odom")
+,odometryTopicName("odometry/filtered")
 ,photonCmdTopicName("/aimabird_control/photonCmd")
 ,photonTmTopicName("/aimabird_control/photonTm")
 ,useQuatParamTopicName("/mavros/setpoint_attitude/use_quaternion")
@@ -109,16 +109,17 @@ void AttControl::prepareToFly()
                     break;
 
                 case Status::sensorsReady:
-                    done = setOffboard();
-                    done = done & mavState.mode == OFFBOARD;
-                    if (done){
-                        logger.addEvent("AttCtrl: offboarded", timeMs);
-                        status = Status::offboarded;
-                    }
-                    else {
-                        logger.addEvent("AttCtrl: offboarding ...", timeMs);
-                        wait(1);
-                    }
+                    done = false;
+//                     done = setOffboard();
+//                     done = done & mavState.mode == OFFBOARD;
+//                     if (done){
+//                         logger.addEvent("AttCtrl: offboarded", timeMs);
+//                         status = Status::offboarded;
+//                     }
+//                     else {
+//                         logger.addEvent("AttCtrl: offboarding ...", timeMs);
+//                         wait(1);
+//                     }
                     break;
 
                 case Status::offboarded:
@@ -167,6 +168,11 @@ void AttControl::prepareToFly()
                     }
                     break;
             }
+        }
+
+        if (status >= Status::sensorsReady){
+            estimateState();
+            writeLogData();
         }
 
         if (status >= Status::armed){

@@ -25,21 +25,21 @@ include_directories(
 )
 
 add_executable(aimabird_control src/start_control.cpp)
-add_executable(aimabird_replay src/replay.cpp)
-add_executable(aimabird_planner src/start_planner.cpp)
-add_executable(aimabird_test src/start_test.cpp)
+# add_executable(aimabird_replay src/replay.cpp)
+# add_executable(aimabird_planner src/start_planner.cpp)
+# add_executable(aimabird_test src/start_test.cpp)
 add_library(aimabird src/AttControl.cpp)
-add_library(estimation_test src/EstimationTest.cpp)
+# add_library(estimation_test src/EstimationTest.cpp)
 
 target_link_libraries(
     aimabird_control aimabird ${catkin_LIBRARIES}
 )
-target_link_libraries(
-    aimabird_replay aimabird ${catkin_LIBRARIES}
-)
-target_link_libraries(
-    aimabird_planner aimabird ${catkin_LIBRARIES}
-)
-target_link_libraries(
-    aimabird_test estimation_test ${catkin_LIBRARIES}
-)
+# target_link_libraries(
+#     aimabird_replay aimabird ${catkin_LIBRARIES}
+# )
+# target_link_libraries(
+#     aimabird_planner aimabird ${catkin_LIBRARIES}
+# )
+# target_link_libraries(
+#     aimabird_test estimation_test ${catkin_LIBRARIES}
+# )
