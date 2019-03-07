@@ -25,7 +25,8 @@ AttControl::AttControl():
 ,setattTopicName("/mavros/setpoint_attitude/attitude")
 ,setthrTopicName("/mavros/setpoint_attitude/thrust")
 ,cmdVelTopicName("/mavros/setpoint_attitude/cmd_vel")
-,odometryTopicName("odometry/filtered")
+//,odometryTopicName("odometry/filtered")
+,odometryTopicName("rtabmap/odom")
 ,photonCmdTopicName("/aimabird_control/photonCmd")
 ,photonTmTopicName("/aimabird_control/photonTm")
 ,useQuatParamTopicName("/mavros/setpoint_attitude/use_quaternion")
@@ -87,11 +88,10 @@ void AttControl::prepareToFly()
         bool done = false;
         if (!waiting()) {
             switch (status){
-
                 case Status::begin:
                     done = init();
                     if (done){
-                        logger.addEvent("AttCtrl: inited", timeMs);
+                        logger.addEvent("AttCtrl: initialize...", timeMs);
                         status = Status::inited;
                     }
                     break;
@@ -109,17 +109,16 @@ void AttControl::prepareToFly()
                     break;
 
                 case Status::sensorsReady:
-                    done = false;
-//                     done = setOffboard();
-//                     done = done & mavState.mode == OFFBOARD;
-//                     if (done){
-//                         logger.addEvent("AttCtrl: offboarded", timeMs);
-//                         status = Status::offboarded;
-//                     }
-//                     else {
-//                         logger.addEvent("AttCtrl: offboarding ...", timeMs);
-//                         wait(1);
-//                     }
+                    done = setOffboard();
+                    done = done & mavState.mode == OFFBOARD;
+                    if (done){
+                        logger.addEvent("AttCtrl: offboarded", timeMs);
+                        status = Status::offboarded;
+                    }
+                    else {
+                        logger.addEvent("AttCtrl: offboarding ...", timeMs);
+                        wait(1);
+                    }
                     break;
 
                 case Status::offboarded:
@@ -136,35 +135,40 @@ void AttControl::prepareToFly()
                     break;
 
                 case Status::armed:
-                    done = accumulateWithImu(Eigen::Vector3f (0.f, 0.f, 1.0f), Eigen::Vector3f(0.f, 0.f, 1.0f));
+                    done = goToLocalPoint(Eigen::Vector3f (0.f, 0.f, 0.6f));
                     if (done) {
+                        flightTimer.start(5000);
+                    }
+                    if (flightTimer.timeout()){
                         logger.addEvent("AttCtrl: tookoff", timeMs);
                         status = Status::tookoff;
                     }
                     break;
 
                 case Status::tookoff:
-                    if (aimAccepted){
-                        //done = goWithVelocity2D(5.f, rInput, yawRateInput);
+                    done = goToLocalPoint(Eigen::Vector3f (0.f, 0.f, -POSE_EPS));
+                    if (done) {
+                        logger.addEvent("AttCtrl: landed", timeMs);
+                        status = Status::landed;
                     }
-                    else{
-                        done = accumulateWithImu(Eigen::Vector3f (0.f, 0.f,-1.f * EST_VEL_EPS));
-                    }
-
+//                     if (aimAccepted){
+//                         //done = goWithVelocity2D(5.f, rInput, yawRateInput);
+//                     }
+//                     else{
+//                         done = accumulateWithImu(Eigen::Vector3f (0.f, 0.f,-1.f * EST_VEL_EPS));
+//                     }
                     break;
 
-                case Status::stabilized:
-//                     done = accumulateVelocityWithImu(Eigen::Vector3f (0.f, 0.f, 0.0f));
-                    if (done) {
-                        logger.addEvent("AttCtrl: stabilized");
-                        status = Status::stabilized;
-                    }
+                case Status::landed:
+                    status = Status::stopped;
                     break;
 
-                case Status::stoped:
-                    done = stop();
+                case Status::stopped:
+                    done = disarm();
                     if (done) {
-                        logger.addEvent("AttCtrl: stoped");
+                        logger.addEvent("AttCtrl: stopped", timeMs);
+                        status = Status::stopped;
+                        return;
                     }
                     break;
             }
@@ -174,11 +178,8 @@ void AttControl::prepareToFly()
             estimateState();
             writeLogData();
         }
-
         if (status >= Status::armed){
-            estimateState();
             sendPhotonTm();
-            writeLogData();
         }
         if (status >= Status::sensorsReady && status < Status::armed) {
             sendIdling(); // send min thrust before flight to able offboard / arm
@@ -224,10 +225,6 @@ bool AttControl::init()
 
 bool AttControl::checkFeedback()
 {
-//     if (!USE_GPS && !USE_ODOMETRY){
-//         logger.addEvent("Wrong configuration: no pos vel feedback");
-//         return false;
-//     }
 
     bool check = imuReady;
     if (USE_GPS) {check = check && velReady && posReady;}
@@ -235,7 +232,6 @@ bool AttControl::checkFeedback()
     if (USE_ALTIMETR) {check = check && altReady;}
     if (USE_LIDAR) {check = check && lidReady;}
     if (check) {
-        status = Status::sensorsReady;
         return true;
     }
     return false;
@@ -262,12 +258,25 @@ bool AttControl::arm()
     return res;
 }
 
+bool AttControl::disarm()
+{
+    mavros_msgs::CommandBool armingMsg;
+    armingMsg.request.value = false;
+
+    bool res = armService.call(armingMsg) && armingMsg.response.success;
+    return res;
+}
+
 
 Eigen::Vector3f AttControl::getRegVector(Eigen::Vector3f dr, Vector3f dv, float dt){
     dr = cutAbsVector3f(dr, Eigen::Vector3f(GO_LOCAL_INPUT_LIM_H, GO_LOCAL_INPUT_LIM_H, GO_LOCAL_INPUT_LIM_V));
+    if (dr[2] < 0){
+        dr[2] = dr[2] / 3.f;
+    }
+
     Eigen::Vector3f P = Eigen::Vector3f(GO_LOCAL_PID_P_H * dr[0], GO_LOCAL_PID_P_H * dr[1], GO_LOCAL_PID_P_V * dr[2]);
     Eigen::Vector3f I;
-    if(-dr[2] * dv[2] < GO_LOCAL_ANTIWINDUP_PARAM_V) {
+    if(-dr[2] * dv[2] < GO_LOCAL_ANTIWINDUP_PARAM_V && dr[2] > 0) {
         I =  goLocalIr.get(Eigen::Vector3f(0.f, 0.f, GO_LOCAL_PID_I_V * dr[2]), dt);
     }
     else{
@@ -283,7 +292,7 @@ Eigen::Vector3f AttControl::getRegVector(Eigen::Vector3f dr, Vector3f dv, float 
 //     printVect(D, "D");
 //     printVect(P, "P");
 //     printVect(DI, "DI");
-    Eigen::Vector3f regOutVec = P + I + D + DI + Eigen::Vector3f(0., 0., FREE_FALL_ACC_ABS);
+    Eigen::Vector3f regOutVec = P + I + D + Eigen::Vector3f(0., 0., FREE_FALL_ACC_ABS);
     return regOutVec;
 }
 
@@ -341,12 +350,12 @@ Vector3f AttControl::getTwistVector(const Eigen::Quaternion<float>& q0, const Ei
 }
 
 
-bool AttControl::goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy, float yaw)
+bool AttControl::goToLocalPoint(Eigen::Vector3f r0)
 {
-    yawRateCtrlMode = false;
-
     float dt = getLastTickDuration();
     Eigen::Quaternion<float> q = qPx;
+    Eigen::Vector3f e = quat2Eul(q);
+    float yaw = e[2];
 
     Eigen::Vector3f r;
     Eigen::Vector3f v;
@@ -359,7 +368,7 @@ bool AttControl::goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy, float 
         v = vPx;
     }
     else {
-        emergencyLand();
+        logger.addEvent("wrong conf", timeMs);
         return false;
     }
 
@@ -376,9 +385,8 @@ bool AttControl::goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy, float 
         pubCtrl(thrust, qCtrlOut);
     }
     else {
-        Eigen::Vector3f o0(0.f, 0.f, 0.f);
-        Eigen::Vector3f oCtrlOut = getTwistVector(qCtrlOut, o0);
-        pubCtrl(thrust, oCtrlOut);
+        logger.addEvent("wrong conf", timeMs);
+        return false;
     }
 
     if (isZeroVector3f(dr, POSE_EPS)){
@@ -440,8 +448,8 @@ bool AttControl::goWithVelocity(Eigen::Vector3f v0,  float yaw0) // v in ENU fra
     Eigen::Vector3f r;
     Eigen::Vector3f v;
     if (USE_ODOMETRY){
-        r = rEs;
-        v = vEs; //
+        r = rOd;
+        v = vOd; //
     }
     else{
         r = rPx;
@@ -542,7 +550,7 @@ bool AttControl::accumulateWithImu(const Eigen::Vector3f& v0, const Eigen::Vecto
     float thrust = regOutVec.dot(UNIT_Z);
 
     if (aPxClearI.norm() > EMERG_ACC_LIM){
-        status = Status::stoped;
+        status = Status::stopped;
         return false;
     };
 
@@ -558,9 +566,7 @@ bool AttControl::accumulateWithImu(const Eigen::Vector3f& v0, const Eigen::Vecto
 
 bool AttControl::stop()
 {
-    Eigen::Quaternion<float> qCtrlOut = qPx * qPxInit;
-    pubCtrl(MIN_THRUST, qCtrlOut);
-    return true;
+    status = Status::stopped;
 }
 
 
@@ -758,16 +764,16 @@ bool AttControl::estimateState()
         bool goodOdometry = !isZeroVector3f(rOd) && !isZeroVector3f(vOd);
 
         if (goodOdometry){
-            Eigen::Vector2f xEstState = ekfX.get(rOd[0], vOd[0], aPxClearI[0], dt);
-            Eigen::Vector2f yEstState = ekfY.get(rOd[1], vOd[1], aPxClearI[1], dt);
-            Eigen::Vector2f zEstState = ekfZ.get(rOd[2], vOd[2], aPxClearI[2], dt);
+            Eigen::Vector2f xEstState = ekfX.get(rOd[0], vOd[0], 0.f, dt);
+            Eigen::Vector2f yEstState = ekfY.get(rOd[1], vOd[1], 0.f, dt);
+            Eigen::Vector2f zEstState = ekfZ.get(rOd[2], vOd[2], 0.f, dt);
             rEs = Eigen::Vector3f(xEstState[0], yEstState[0], zEstState[0]);
             vEs = Eigen::Vector3f(xEstState[1], yEstState[1], zEstState[1]);
         }
         else {
-            Eigen::Vector2f xEstState = ekfX.get(aPxClearI[0], dt);
-            Eigen::Vector2f yEstState = ekfY.get(aPxClearI[1], dt);
-            Eigen::Vector2f zEstState = ekfZ.get(aPxClearI[2], dt);
+            Eigen::Vector2f xEstState = ekfX.get(0.f, dt);
+            Eigen::Vector2f yEstState = ekfY.get(0.f, dt);
+            Eigen::Vector2f zEstState = ekfZ.get(0.f, dt);
             rEs = Eigen::Vector3f(xEstState[0], yEstState[0], zEstState[0]);
             vEs = Eigen::Vector3f(xEstState[1], yEstState[1], zEstState[1]);
         }

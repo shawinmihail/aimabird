@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <string>
+#include <chrono>
 
 bool isNanVect(const Eigen::Vector3f& v){
     return std::isnan(v[0]) || std::isnan(v[1]) || std::isnan(v[2]);
@@ -427,6 +428,30 @@ public:
     return std::fmod(from - to + 5.f * PI, PI * 2.f) - PI;
 }
 
+};
+
+class Timer{
+public:
+        Timer() : started(false)
+        {};
+        void start(uint64_t ms){
+            if (started){return;}
+            initTime = std::chrono::high_resolution_clock::now();
+            delta_ms = ms;
+            started = true;
+        }
+
+        bool timeout(){
+            if (!started){return false;}
+            uint64_t dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - initTime).count();
+            if (dt >= delta_ms) {return true;}
+            return false;
+        }
+
+private:
+    std::chrono::high_resolution_clock::time_point initTime;
+    uint64_t delta_ms;
+    bool started;
 };
 
 

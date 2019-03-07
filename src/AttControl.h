@@ -36,7 +36,8 @@ enum Status{
     armed,
     tookoff,
     stabilized,
-    stoped
+    landed,
+    stopped
 };
 
 enum Command {
@@ -59,6 +60,7 @@ class AttControl {
 public:
     AttControl();
     void prepareToFly();
+    bool stop();
 private:
     void main();
     void checkSensors();
@@ -78,10 +80,10 @@ private:
     bool estimateState();
     bool setOffboard();
     bool arm();
+    bool disarm();
     bool takeoff(float h);
     bool emergencyLand();
-    bool stop();
-    bool goToLocalPoint(Eigen::Vector3f r0, YawStrategy strategy, float yaw);
+    bool goToLocalPoint(Eigen::Vector3f r0);
     bool goOnRoute(std::vector<Eigen::Vector3f> route); //TODO not implemented yet
     bool goWithVelocity(Eigen::Vector3f v0, float yaw);
     //bool goWithVelocity2D(float h, Eigen::Vector3f v0, float yawRate);
@@ -212,6 +214,8 @@ private:
     Ekf ekfLid;
     SeriesDifferentiator<float> altSerDiff;
     SeriesDifferentiator<float> lidSerDiff;
+
+    Timer flightTimer;
 
 //     DelayIters<Eigen::Vector3f> delayR;
 //     DelayIters<Eigen::Vector3f> delayV;
