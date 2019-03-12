@@ -109,6 +109,7 @@ void AttControl::prepareToFly()
                     break;
 
                 case Status::sensorsReady:
+                    sendIdling();
                     done = setOffboard();
                     done = done & mavState.mode == OFFBOARD;
                     if (done){
@@ -122,11 +123,13 @@ void AttControl::prepareToFly()
                     break;
 
                 case Status::offboarded:
+                    sendIdling();
                     done = arm();
                     done = done & mavState.armed;
                     if (done){
-                        logger.addEvent("AttCtrl: armed", timeMs);
-                        status = Status::armed;
+                        //logger.addEvent("AttCtrl: armed", timeMs);
+                        //status = Status::armed;
+                        std::cout << "send idling" << std::endl;
                     }
                     else{
                         logger.addEvent("AttCtrl: arming ...", timeMs);
@@ -181,9 +184,7 @@ void AttControl::prepareToFly()
         if (status >= Status::armed){
             sendPhotonTm();
         }
-        if (status >= Status::sensorsReady && status < Status::armed) {
-            sendIdling(); // send min thrust before flight to able offboard / arm
-        }
+
         ros::spinOnce();
         rate.sleep();
     }
@@ -607,7 +608,7 @@ void AttControl::initPubs()
 bool AttControl::sendIdling()
 {
     if (USE_QUATERNION){
-        pubCtrl(MIN_THRUST, qPx);
+        pubCtrl(MIN_THRUST, qPx * qPxInit);
     }
     else{
         pubCtrl(MIN_THRUST, Eigen::Vector3f(0.f, 0.f, 0.f));

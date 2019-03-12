@@ -6,7 +6,7 @@
 AttControl* attControl;
 void ctrl_c(int sig){ // can be called asynchronously
     attControl->stop();
-    std::cout << "\ntry to stop...\n" << std::endl;
+    std::cout << "\ntry to stop..." << std::endl;
 }
 
 int main(int argc, char **argv)
